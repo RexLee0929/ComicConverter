@@ -25,7 +25,7 @@ cd src/app && dotnet build -c Release
 cd ../installer && dotnet build -c Release
 ```
 
-构建产物只留在本机：主程序在 `src/app/bin/Release/net48/`，安装包是 `src/installer/bin/Release/net48/ComicConverter-<版本>-setup.exe`（文件名带版本号，构建时从 `version.props` 自动取）。发布区仓库不放任何构建产物，安装包直接传 GitHub Releases。`payload.zip` 在 `.gitignore` 里。
+构建产物统一复制到编辑区根的 **`artifacts/`**（每次构建整目录重建，不残留旧版本）：安装包是 `artifacts/ComicConverter-<版本>-setup.exe`（文件名带版本号，构建时从 `version.props` 自动取），旁边是主程序运行文件。`src/*/bin/` 只是编译中间目录。发布区仓库不放任何构建产物，安装包直接从 `artifacts/` 传 GitHub Releases。`payload.zip` 在 `.gitignore` 里。
 
 ## 改动范围
 

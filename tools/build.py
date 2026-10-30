@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ComicConverter 一键构建：主程序 → payload.zip → 安装器 → 同步源码到发布区。
+ComicConverter 一键构建：主程序 → payload.zip → 安装器 → 产物进 artifacts/ → 同步源码到发布区。
 
-发布产物不再放进发布区仓库：安装器 exe 本身就是发布产物（安装器设计规范 §一），
-直接从 src/installer/bin/Release/net48/ 取 `ComicConverter-<版本>-setup.exe` 传 GitHub Releases。
+发布产物统一放在编辑区根的 artifacts/（浅、好找）：安装器 exe 本身就是发布产物
+（安装器设计规范 §一），发版直接从 artifacts/ 取 `ComicConverter-<版本>-setup.exe` 传 GitHub Releases。
+bin/obj 只是编译中间目录，发布区仓库不放任何构建产物。
 
 用法:
-  python tools/build.py                 # 只编译，不同步发布区（默认）
-  python tools/build.py --apply         # 编译并把源码同步到发布区（不含任何构建产物）
+  python tools/build.py                 # 编译，产物复制进 artifacts/
+  python tools/build.py --apply         # 编译后再把源码同步到发布区（不含任何构建产物）
   python tools/build.py --apply --clean # 先清 bin/obj 再编译
   python tools/build.py --no-installer  # 跳过安装器（只编主程序）
 """
@@ -34,6 +35,7 @@ SETUP_DIR = ROOT / "src" / "installer"
 APP_OUT = APP_DIR / "bin" / "Release" / "net48"
 SETUP_OUT = SETUP_DIR / "bin" / "Release" / "net48"
 PAYLOAD = SETUP_DIR / "payload.zip"
+ARTIFACTS = ROOT / "artifacts"          # 发布产物统一出口（编辑区根，浅层好找）
 
 
 def read_version() -> str:
@@ -152,6 +154,16 @@ def main() -> int:
     print(f"产物 {len(pairs)} 个：")
     for src, rel in pairs:
         print(f"  {rel.as_posix():<44} {src.stat().st_size / 1024:>8.0f} KB")
+
+    # 产物统一复制进 artifacts/：整目录重建，旧版本的安装器不会残留
+    if ARTIFACTS.is_dir():
+        shutil.rmtree(ARTIFACTS, ignore_errors=True)
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    for src, rel in pairs:
+        dst = ARTIFACTS / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+    print(f"已复制到 {ARTIFACTS}")
 
     if not args.apply:
         print("-" * 64)
