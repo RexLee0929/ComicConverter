@@ -16,7 +16,8 @@ namespace ComicConverterSetup
                   PageDir = 3, PageTasks = 4, PageReady = 5;
 
         int _page;
-        bool _busy, _done, _failed, _blocked, _upgradeOk, _dirTouched;
+        bool _busy, _done, _failed, _blocked, _dirTouched;
+        bool _overwriteConfig;    // 用户勾了「覆盖现有配置」才为 true；默认不动本地配置
         string _blockedPath;      // 被占用的那个文件，用于在页面上指名道姓
 
         string _dir;
@@ -26,6 +27,9 @@ namespace ComicConverterSetup
         ModeCard _cardUser, _cardAll;
         Label _modeHint;
         TextBox _dirBox;
+        Label _localExe;          // 「已安装过」提示，条件出现
+        Label _localCfg;          // 「已有配置」提示，条件出现
+        CheckBox _cbOverwrite;    // 覆盖配置，仅在有配置时出现，默认不勾
         CheckBox _cbDesktop, _cbStart, _cbRun;
         ProgressStrip _bar;
         Label _status;
@@ -183,9 +187,87 @@ namespace ComicConverterSetup
 
                 _dirTouched = true;
                 _dirBox.Text = full;
+                RefreshLocalState();       // 换了目录要重新判定有没有配置
             };
 
             L(SizeText(), 0, 84, 428, 20);
+
+            // ---- 本地状态：没有就整块不出现（规范 §三.2）
+            _localExe = L("", 0, 118, 428, 20);
+            _localCfg = L("", 0, 142, 428, 20);
+            _cbOverwrite = Check("覆盖现有配置（恢复为默认设置）", 0, 166, 380, false);
+            _cbOverwrite.CheckedChanged += delegate { _overwriteConfig = _cbOverwrite.Checked; };
+
+            _dirBox.TextChanged += delegate { RefreshLocalState(); };
+            RefreshLocalState();
+        }
+
+        /// <summary>已装版本 → 一行结论文案。降级必须说清楚，别让用户默默退回旧版。</summary>
+        static string UpgradeText(Program.UpgradeKind kind, string installed)
+        {
+            var have = string.IsNullOrEmpty(installed) ? "未知版本" : "v" + installed;
+            var now = "v" + Program.Version;
+
+            switch (kind)
+            {
+                case Program.UpgradeKind.Update:
+                    return "该位置已安装 " + have + "，将更新到 " + now + "。";
+                case Program.UpgradeKind.Same:
+                    return "该位置已安装 " + have + "（与安装包相同），将重新安装覆盖。";
+                case Program.UpgradeKind.Downgrade:
+                    return "该位置已安装 " + have + "，比本安装包 " + now + " 新。继续将降级到 " + now + "。";
+                case Program.UpgradeKind.Unknown:
+                    return "该位置已安装 " + Program.AppName + "（" + have + "），将覆盖程序文件。";
+                default:
+                    return "";
+            }
+        }
+
+
+        /// <summary>
+        /// 按当前路径刷新「本地状态」区：有已装程序 / 有配置才显示，都没有就整块隐藏。
+        /// 切到没有配置的目录时，复选框要连勾选状态一起复位，不能把上一个目录的选择带过去。
+        /// </summary>
+        void RefreshLocalState()
+        {
+            if (_localExe == null || _localCfg == null || _cbOverwrite == null) return;
+
+            var dir = _dirBox == null ? _dir : _dirBox.Text.Trim();
+            bool hasExe = false, hasCfg = false;
+            Program.UpgradeKind kind = Program.UpgradeKind.Fresh;
+            string installed = null;
+            try
+            {
+                if (!string.IsNullOrEmpty(dir) && Path.IsPathRooted(dir))
+                {
+                    hasExe = File.Exists(Program.ExePathIn(dir));
+                    hasCfg = Program.HasConfig(dir);
+                    if (hasExe) kind = Program.DetectUpgrade(dir, out installed);
+                }
+            }
+            catch { }
+
+            _localExe.Visible = hasExe;
+            _localExe.Text = hasExe ? UpgradeText(kind, installed) : "";
+            // 降级用警示色，其它用普通灰
+            _localExe.ForeColor = kind == Program.UpgradeKind.Downgrade ? Theme.Warn : Theme.Muted;
+
+            _localCfg.Visible = hasCfg;
+            _localCfg.Text = hasCfg ? "检测到本地已有配置，将保留你现有的设置。" : "";
+
+            _cbOverwrite.Visible = hasCfg;
+            _cbOverwrite.Enabled = hasCfg;
+            if (!hasCfg) _cbOverwrite.Checked = false;   // 没配置就不可能覆盖
+            _overwriteConfig = _cbOverwrite.Checked;
+
+            // 依次紧凑排布，没有的那块不占位
+            int y = 118;
+            if (hasExe) { _localExe.Location = P(0, y); y += 24; }
+            if (hasCfg)
+            {
+                _localCfg.Location = P(0, y);
+                _cbOverwrite.Location = P(0, y + 24);
+            }
         }
 
         static string SizeText()
@@ -230,19 +312,65 @@ namespace ComicConverterSetup
         {
             TitleLabel.Text = "准备安装";
 
-            L("安装程序现在准备开始安装 " + Program.AppName + " 到您的计算机。\n\n"
-              + "点「安装」开始安装，或点「上一步」复查或更改设置。", 0, 0, 428, 76);
+            // Body 区只有 264px 高，最多要放 5 段（模式/位置/操作类型/本地配置/附加任务），
+            // 所以导语压成一行、每段步进 38px，别用宽松行距，否则最后一段会被分隔线裁掉。
+            L("点「安装」开始安装，或点「上一步」复查或更改设置。", 0, 0, 428, 20);
 
-            Strong("安装模式：", 0, 84, 428, 22);
+            int y = 26;
+            const int Step = 42;      // 5 段最多占到 252px，Body 高 264px，刚好留出余量
+
+            Strong("安装模式：", 0, y, 428, 20);
             L(_mode == InstallMode.AllUsers
                 ? "为所有用户安装（写入 Program Files，需要管理员权限）"
-                : "仅为我安装（写入当前用户目录）", 0, 106, 428, 20);
+                : "仅为我安装（写入当前用户目录）", 0, y + 18, 428, 18);
+            y += Step;
 
-            Strong("安装位置：", 0, 134, 428, 22);
-            L(_dir, 0, 156, 428, 20);
+            Strong("安装位置：", 0, y, 428, 20);
+            L(_dir, 0, y + 18, 428, 18);
+            y += Step;
 
-            Strong("附加任务：", 0, 184, 428, 22);
-            L(TaskSummary(), 0, 206, 428, 44);
+            // 已装过就说明这次是更新 / 重装 / 降级（规范 §三.3）
+            string installed;
+            var kind = Program.DetectUpgrade(_dir, out installed);
+            if (kind != Program.UpgradeKind.Fresh)
+            {
+                Strong("操作类型：", 0, y, 428, 20);
+                var lbl = L(ActionText(kind, installed), 0, y + 18, 428, 18);
+                if (kind == Program.UpgradeKind.Downgrade) lbl.ForeColor = Theme.Warn;
+                y += Step;
+            }
+
+            // 只在目标目录确实有配置时才出现（规范 §三.2：没有就不占位）
+            if (Program.HasConfig(_dir))
+            {
+                Strong("本地配置：", 0, y, 428, 20);
+                L(_overwriteConfig
+                    ? "覆盖（恢复为默认设置）"
+                    : "保留现有配置", 0, y + 18, 428, 18);
+                y += Step;
+            }
+
+            Strong("附加任务：", 0, y, 428, 20);
+            L(TaskSummary(), 0, y + 18, 428, 40);
+        }
+
+        /// <summary>「准备安装」页的操作类型文案，比页面提示更短。</summary>
+        static string ActionText(Program.UpgradeKind kind, string installed)
+        {
+            var have = string.IsNullOrEmpty(installed) ? "未知版本" : "v" + installed;
+            switch (kind)
+            {
+                case Program.UpgradeKind.Update:
+                    return "更新 " + have + " → v" + Program.Version;
+                case Program.UpgradeKind.Same:
+                    return "重新安装（已装 " + have + "，版本相同）";
+                case Program.UpgradeKind.Downgrade:
+                    return "降级 " + have + " → v" + Program.Version + "（已装版本更新）";
+                case Program.UpgradeKind.Unknown:
+                    return "覆盖安装（已装版本无法识别）";
+                default:
+                    return "全新安装";
+            }
         }
 
         string TaskSummary()
@@ -319,15 +447,10 @@ namespace ComicConverterSetup
                         _dir = _dirBox.Text.Trim();
                         _dirTouched = true;
 
-                        if (!_upgradeOk && File.Exists(Program.ExePathIn(_dir)))
-                        {
-                            var r = MessageBox.Show(this,
-                                "该位置已存在 " + Program.AppName + "：" + _dir
-                                + "\n\n继续将覆盖现有版本，设置文件 config.json 会保留。",
-                                Program.AppName, MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
-                            if (r != DialogResult.OK) return;
-                            _upgradeOk = true;
-                        }
+                        // 不再弹「已存在，是否覆盖」确认框：本地状态已在上面的页面里显示，
+                        // 是否覆盖配置由复选框表达（默认保留）。见规范 §三.2
+                        _overwriteConfig = _cbOverwrite != null && _cbOverwrite.Visible
+                                           && _cbOverwrite.Checked;
                         ShowPage(PageTasks);
                         return;
                     }
@@ -419,7 +542,7 @@ namespace ComicConverterSetup
             {
                 try
                 {
-                    Program.DoInstall(dir, mode, _desktop, _start, delegate(int pct, string name)
+                    Program.DoInstall(dir, mode, _desktop, _start, _overwriteConfig, delegate(int pct, string name)
                     {
                         Ui(delegate
                         {

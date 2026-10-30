@@ -424,6 +424,7 @@ namespace ComicConverter
             if (limit > 0 && files.Count > limit) files = files.Take(limit).ToList();
 
             bool useT2s = GetStr(cfg, "t2s", "tw2s").Length > 0;
+            bool t2sLabel = GetBool(cfg, "t2s_label", true);
             bool dropJunk = GetBool(cfg, "drop_junk", true);
 
             foreach (var f in files)
@@ -464,7 +465,7 @@ namespace ComicConverter
                             TallRatio = Origin.TallRatio(zip, pages, 9)
                         };
                         it.Series = useT2s ? Chinese.ToSimplified(SafeName(series, 120), true) : SafeName(series, 120);
-                        it.Label = useT2s ? Chinese.ToSimplified(label, true) : label;
+                        it.Label = (useT2s && t2sLabel) ? Chinese.ToSimplified(label, true) : label;
                         it.Title = useT2s ? Chinese.ToSimplified(meta.TryGetValue("title", out title) && title.Length > 0 ? title : series, true)
                                           : (meta.TryGetValue("title", out title) && title.Length > 0 ? title : series);
 

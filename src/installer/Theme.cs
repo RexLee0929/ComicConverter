@@ -22,6 +22,9 @@ namespace ComicConverterSetup
         /// <summary>自绘进度条的轨道底色。中性色，不跟图标派生 —— 只是个浅灰槽。</summary>
         public static readonly Color ProgressTrack = Color.FromArgb(0xEC, 0xEC, 0xEC);
 
+        /// <summary>警示文字（降级、覆盖等需要用户注意的提示）。固定色，不参与派生。</summary>
+        public static readonly Color Warn = Color.FromArgb(0x8A, 0x53, 0x00);
+
         /// <summary>兜底种子：只在图标取不出主色时使用（绿色，即原来那套）。</summary>
         public static readonly Color FallbackSeed = Color.FromArgb(0x1B, 0x8F, 0x72);
 

@@ -59,6 +59,87 @@ namespace ComicConverterSetup
         }
 
         // ------------------------------------------------------------ 安装范围
+
+        /// <summary>
+        /// 目标目录里已装版本的对比结论。决定「选择安装位置」页的文案和「准备安装」页的行为判定。
+        /// </summary>
+        public enum UpgradeKind
+        {
+            /// <summary>目录是空的，没装过。</summary>
+            Fresh,
+            /// <summary>已装版本比安装包旧 —— 正常升级。</summary>
+            Update,
+            /// <summary>版本相同 —— 重装 / 修复。</summary>
+            Same,
+            /// <summary>已装版本比安装包新 —— 降级，要提醒用户。</summary>
+            Downgrade,
+            /// <summary>exe 在但版本读不出来（破解过 / 手工拷的 / 文件损坏）。</summary>
+            Unknown
+        }
+
+        /// <summary>读目标目录里已安装程序的版本号，读不到返回 null。</summary>
+        public static string InstalledVersion(string dir)
+        {
+            try
+            {
+                var exe = ExePathIn(dir);
+                if (!File.Exists(exe)) return null;
+
+                var vi = FileVersionInfo.GetVersionInfo(exe);
+                if (!string.IsNullOrEmpty(vi.ProductVersion)) return vi.ProductVersion.Trim();
+                if (!string.IsNullOrEmpty(vi.FileVersion)) return vi.FileVersion.Trim();
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>把 "1.2.3" / "1.2.3.0" 这类字符串解析成可比较的版本；解析失败返回 null。</summary>
+        static Version ParseVersion(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return null;
+
+            // 只取开头的数字和点，丢掉 "1.2.3-beta" 这类后缀
+            var sb = new StringBuilder();
+            foreach (var c in s.Trim())
+            {
+                if (char.IsDigit(c) || c == '.') sb.Append(c);
+                else break;
+            }
+
+            var text = sb.ToString().Trim('.');
+            if (text.Length == 0) return null;
+
+            // 补齐到三段，"1.2" -> "1.2.0"，否则 Version 解析会报错
+            var parts = text.Split('.');
+            if (parts.Length == 1) text += ".0.0";
+            else if (parts.Length == 2) text += ".0";
+
+            try { return new Version(text); }
+            catch { return null; }
+        }
+
+        /// <summary>判定本次安装属于全新安装 / 更新 / 重装 / 降级。</summary>
+        public static UpgradeKind DetectUpgrade(string dir, out string installed)
+        {
+            installed = null;
+            try
+            {
+                if (!File.Exists(ExePathIn(dir))) return UpgradeKind.Fresh;
+            }
+            catch { return UpgradeKind.Fresh; }
+
+            installed = InstalledVersion(dir);
+            var oldV = ParseVersion(installed);
+            var newV = ParseVersion(Version);
+
+            if (oldV == null || newV == null) return UpgradeKind.Unknown;
+
+            int cmp = oldV.CompareTo(newV);
+            if (cmp < 0) return UpgradeKind.Update;
+            if (cmp == 0) return UpgradeKind.Same;
+            return UpgradeKind.Downgrade;
+        }
+
         public static InstallMode Mode = InstallMode.PerUser;
 
         public static bool IsAllUsers { get { return Mode == InstallMode.AllUsers; } }
@@ -110,6 +191,22 @@ namespace ComicConverterSetup
 
         public static string ExePathIn(string dir) { return Path.Combine(dir, AppExe); }
         public static string ReadmePathIn(string dir) { return Path.Combine(dir, ReadmeName); }
+
+        /// <summary>用户配置文件。安装时不覆盖（payload 里没有它），卸载时默认保留。</summary>
+        public const string ConfigName = "config.json";
+
+        public static string ConfigPathIn(string dir) { return Path.Combine(dir, ConfigName); }
+
+        /// <summary>目标目录里是否已有用户配置 —— 决定「选择安装位置」页要不要显示覆盖选项。</summary>
+        public static bool HasConfig(string dir)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(dir) || !Path.IsPathRooted(dir)) return false;
+                return File.Exists(ConfigPathIn(dir));
+            }
+            catch { return false; }
+        }
 
         public static bool IsUnderProgramFiles(string dir)
         {
@@ -297,7 +394,7 @@ namespace ComicConverterSetup
             {
                 try
                 {
-                    DoInstall(DefaultDir(), Mode, true, true, null);
+                    DoInstall(DefaultDir(), Mode, true, true, false, null);
                     Environment.Exit(0);
                 }
                 catch { Environment.Exit(1); }
@@ -353,8 +450,10 @@ namespace ComicConverterSetup
         }
 
         // ------------------------------------------------------------ 安装
+        /// <param name="resetConfig">用户勾了「覆盖现有配置」：装完删掉 config.json，程序下次启动重建默认值。</param>
         public static void DoInstall(string dir, InstallMode mode, bool desktopShortcut,
-                                     bool startMenuShortcut, Action<int, string> progress)
+                                     bool startMenuShortcut, bool resetConfig,
+                                     Action<int, string> progress)
         {
             Directory.CreateDirectory(dir);
 
@@ -385,6 +484,17 @@ namespace ComicConverterSetup
                             progress(total == 0 ? 100 : i * 100 / total, e.Name);
                     }
                 }
+            }
+
+            // 用户勾了「覆盖现有配置」才删；不勾时 payload 里也没有 config.json，天然不碰它
+            if (resetConfig)
+            {
+                try
+                {
+                    var cfg = ConfigPathIn(dir);
+                    if (File.Exists(cfg)) File.Delete(cfg);
+                }
+                catch { }
             }
 
             // 使用说明随程序一起装进去，完成页可以勾选查看

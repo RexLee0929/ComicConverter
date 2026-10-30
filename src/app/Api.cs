@@ -45,6 +45,7 @@ namespace ComicConverter
                 {"overwrite", false},
                 {"drop_junk", true},
                 {"keep_label", true},
+                {"t2s_label", true},
                 {"limit", 0},
                 {"mode", "convert"}
             };

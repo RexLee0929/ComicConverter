@@ -170,6 +170,9 @@ opacity:0;pointer-events:none;transition:.18s;box-shadow:0 4px 14px rgba(0,0,0,.
           <input type="radio" name="t2s" id="cc_t" value="t2s"><label for="cc_t">通用繁体</label>
         </div>
         <div class="hint">含假名的日文标题整条保留。</div>
+        <div class="switch" style="margin-top:6px"><span class="t">卷名 / 话名也转换</span>
+          <input type="checkbox" id="t2sLabel"><label class="track" for="t2sLabel"></label></div>
+        <div class="hint">关掉就保留原始字形，例如 <code>(馮寶寶03)</code>。</div>
       </div>
       <div class="field">
         <label class="lbl">番外 / 特别篇</label>
@@ -289,6 +292,7 @@ function getCfg(){
     jobs: parseInt($('jobs').value) || 6,
     overwrite: $('overwrite').checked, drop_junk: $('dropJunk').checked,
     keep_label: $('keepLabel').checked,
+    t2s_label: $('t2sLabel').checked,
     limit: $('useLimit').checked ? (parseInt($('limit').value) || 0) : 0,
     mode: MODE
   };
@@ -358,6 +362,7 @@ async function loadCfg(){
   setR('special', c.special || 'series');
   $('jobs').value = c.jobs || 6;
   $('keepLabel').checked = c.keep_label !== false;
+  $('t2sLabel').checked = c.t2s_label !== false;
   $('dropJunk').checked = c.drop_junk !== false;
   $('overwrite').checked = !!c.overwrite;
   $('useLimit').checked = (c.limit || 0) > 0;
