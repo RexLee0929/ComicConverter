@@ -279,6 +279,14 @@ namespace ComicConverter
                 return;
             }
 
+            // 首次启动就落盘一份默认配置：安装器/卸载器靠安装目录里有没有 config.json
+            // 决定要不要显示「覆盖现有配置」「保留配置文件」。只有改设置才写文件的话，
+            // 从没动过设置的用户重装时永远看不到这些选项，配置的保留/覆盖也就无从谈起。
+            if (!File.Exists(Api.ConfigPath))
+            {
+                try { Api.SaveConfig(Api.DefaultConfig()); } catch { }
+            }
+
             try
             {
                 var udf = Path.Combine(CacheDir, "WebView2");

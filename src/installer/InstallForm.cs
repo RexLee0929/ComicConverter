@@ -267,6 +267,8 @@ namespace ComicConverterSetup
             {
                 _localCfg.Location = P(0, y);
                 _cbOverwrite.Location = P(0, y + 24);
+                // 复选框提到最前：它是可操作项，绝不能被上面的文字标签盖住
+                _cbOverwrite.BringToFront();
             }
         }
 
@@ -665,7 +667,11 @@ namespace ComicConverterSetup
 
             Strong("需要写入的文件正被占用：", 0, 0, 428, 22);
             L(_dir, 0, 24, 428, 20);
-            if (!string.IsNullOrEmpty(path)) L(path, 0, 46, 428, 20);
+            if (!string.IsNullOrEmpty(path))
+            {
+                var p = L(path, 0, 46, 428, 20);
+                p.AutoEllipsis = true;      // 长路径单行裁切时给省略号，别硬截成半截
+            }
 
             Strong("请选择一种处理方式：", 0, 80, 428, 22);
             L("· 点「结束进程并继续」—— 自动关闭正在运行的 " + Program.AppName
