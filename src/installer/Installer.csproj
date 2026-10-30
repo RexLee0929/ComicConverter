@@ -7,7 +7,9 @@
     <TargetFramework>net48</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>ComicConverter-Setup</AssemblyName>
+    <!-- 安装器文件名必须带版本号（见安装器设计规范 §一）：
+         version.props 是唯一来源，改版本这里自动跟着变 -->
+    <AssemblyName>ComicConverter-$(Version)-setup</AssemblyName>
     <RootNamespace>ComicConverterSetup</RootNamespace>
     <DebugType>none</DebugType>
     <Deterministic>true</Deterministic>

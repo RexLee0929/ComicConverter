@@ -101,7 +101,8 @@ def build_files() -> list[tuple[Path, Path]]:
     if setup.is_dir():
         for p in setup.iterdir():
             if p.is_file() and p.name.lower().endswith(".exe"):
-                pairs.append((p, Path("ComicConverter-Setup.exe")))
+                # 安装器文件名自带版本号（如 ComicConverter-1.0.3-setup.exe），保持原名
+                pairs.append((p, Path(p.name)))
     return pairs
 
 

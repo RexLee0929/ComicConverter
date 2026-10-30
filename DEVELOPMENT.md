@@ -10,11 +10,11 @@
 
 ## 编译
 
-一条命令跑完主程序、`payload.zip`、安装器和发布产物：
+一条命令跑完主程序、`payload.zip` 和安装器：
 
 ```bash
 python tools/build.py            # 只编译主程序
-python tools/build.py --apply    # 编译并写出 dist/
+python tools/build.py --apply    # 编译并把源码同步到发布区（不含构建产物）
 python tools/build.py --clean    # 先清 bin/obj 再编译
 ```
 
@@ -25,7 +25,7 @@ cd src/app && dotnet build -c Release
 cd ../installer && dotnet build -c Release
 ```
 
-`dist/` 里有七个运行文件加一个安装包：主程序 exe、`ComicConverter.exe.config`、三个 `Microsoft.Web.WebView2.*.dll`、`WebView2Loader.dll`（含 `runtimes/win-x86` 那份）、以及 `ComicConverter-Setup.exe`。`dist/` 和 `payload.zip` 都在 `.gitignore` 里，安装包走 Releases 发布。
+构建产物只留在本机：主程序在 `src/app/bin/Release/net48/`，安装包是 `src/installer/bin/Release/net48/ComicConverter-<版本>-setup.exe`（文件名带版本号，构建时从 `version.props` 自动取）。发布区仓库不放任何构建产物，安装包直接传 GitHub Releases。`payload.zip` 在 `.gitignore` 里。
 
 ## 改动范围
 
@@ -33,9 +33,9 @@ cd ../installer && dotnet build -c Release
 - 「帮助 → 关于」的文案在 `src/app/ABOUT.md`，Markdown 格式，占位符 `{NAME}` `{VERSION}` `{AUTHOR}` `{TAGLINE}` 启动时替换
 - 界面本体是 `src/app/Web/index.html`，一个文件装完 HTML、CSS 和 JS，经本地 HTTP 服务加载
 - 加界面开关时三处一起改：`Web/index.html` 的控件 + `getCfg()` + `loadCfg()`，`Api.cs` 的 `DefaultConfig()` 加默认值，`Core.cs` 里用 `GetBool` / `GetStr` 读（`t2s_label` 就是一个例子：控制括号里的原卷标签要不要跟着繁转简）
-- 版本号只改 `src/version.props`，主程序和安装器都导入它
+- 版本号只改 `src/version.props`，主程序和安装器都导入它；安装器文件名（`ComicConverter-<版本>-setup.exe`）跟着自动变
 
-**README.md 和 LICENSE 会被编进安装器**（`src/installer/Installer.csproj` 里的 `EmbeddedResource`），装完写到安装目录，完成页可以打开。所以改完 README 要重新编译安装器，否则 `dist/` 里那份安装包带的还是旧文案。也因为这个，README 要能脱离 GitHub 单独读懂，别放相对路径的图片。
+**README.md 和 LICENSE 会被编进安装器**（`src/installer/Installer.csproj` 里的 `EmbeddedResource`），装完写到安装目录，完成页可以打开。所以改完 README 要重新编译安装器，否则新编出来的安装包带的还是旧文案。也因为这个，README 要能脱离 GitHub 单独读懂，别放相对路径的图片。
 
 ## 图标与配色
 
@@ -99,6 +99,7 @@ dotnet run -c Release --project tools/ui_render -- tools/_shots/ui
 - **`RichTextBox.Document` 赋值后 `PagePadding` 会被强制改回 `5,0,5,0`**，设 0 没用。
 - **`FlowDocument` 不计首段上边距和末段下边距**，所以关于窗卡片的上下留白只能放在 Border 的内边距里，放段落 Margin 上不会生效。
 - **`SizeToContent` 量不准含富文本的窗口**，会量偏小把底部按钮挤出窗口。关于窗改成在 `ContentRendered` 里按 `ExtentHeight − ViewportHeight` 自动校正。
+- **WinForms 的 TextBox 只认 CRLF**。内嵌的 LICENSE 常是 LF 行尾，直接塞进许可页会整篇挤成一段。`Program.cs` 的 `ToCrlf` 在展示前统一行尾。
 - 端口 `8765` 被上一个没退干净的实例占着的话，本地服务起不来。测试前先 `taskkill`。
 - **行尾**：仓库里的文本文件是 LF。用 Windows 上的编辑器改完记得确认没被转成 CRLF。
 

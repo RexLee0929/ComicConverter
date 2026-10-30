@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ComicConverter 一键构建：主程序 → payload.zip → 安装器 → 同步到发布区。
+ComicConverter 一键构建：主程序 → payload.zip → 安装器 → 同步源码到发布区。
+
+发布产物不再放进发布区仓库：安装器 exe 本身就是发布产物（安装器设计规范 §一），
+直接从 src/installer/bin/Release/net48/ 取 `ComicConverter-<版本>-setup.exe` 传 GitHub Releases。
 
 用法:
-  python tools/build.py                 # 只编译，不碰发布区（默认）
-  python tools/build.py --apply         # 编译并把产物同步到发布区的 dist/（源码也一并同步）
+  python tools/build.py                 # 只编译，不同步发布区（默认）
+  python tools/build.py --apply         # 编译并把源码同步到发布区（不含任何构建产物）
   python tools/build.py --apply --clean # 先清 bin/obj 再编译
   python tools/build.py --no-installer  # 跳过安装器（只编主程序）
-  python tools/build.py --dest D:/Code/ComicConverter
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,7 +34,19 @@ SETUP_DIR = ROOT / "src" / "installer"
 APP_OUT = APP_DIR / "bin" / "Release" / "net48"
 SETUP_OUT = SETUP_DIR / "bin" / "Release" / "net48"
 PAYLOAD = SETUP_DIR / "payload.zip"
-SETUP_EXE = "ComicConverter-Setup.exe"
+
+
+def read_version() -> str:
+    """版本唯一来源是 src/version.props，安装器名与发布包名都从这里取。"""
+    text = (ROOT / "src" / "version.props").read_text(encoding="utf-8")
+    m = re.search(r"<Version>([^<]+)</Version>", text)
+    return m.group(1).strip() if m else "0.0.0"
+
+
+VERSION = read_version()
+# 安装器的文件名必须带版本号（安装器设计规范 §一），
+# 且安装器 exe 本身就是发布产物，不再打 zip/7z 包
+SETUP_EXE = f"ComicConverter-{VERSION}-setup.exe"
 SKIP_EXT = {".pdb", ".xml", ".zip"}
 # 运行时产生的文件绝不能进安装包：会把开发者本机的设置带给用户
 SKIP_NAMES = {"config.json", "error.log"}
@@ -147,16 +162,7 @@ def main() -> int:
         print(f"× 发布区不存在: {dest}")
         return 2
 
-    # 发布产物统一进 dist/：dist 在 .gitignore 里，仓库只留源码
-    dist = dest / "dist"
-    written = 0
-    for src, rel in pairs:
-        dst = dist / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-        written += 1
-    print(f"已写入 {dist}  {written} 个文件")
-
+    # 只同步源码：发布区仓库不放构建产物，安装器 exe 直接传 GitHub Releases（规范 §一）
     print("-" * 64)
     print("同步源码")
     # --prune：发布区是编辑区的镜像，编辑区删掉的文件发布区也要删，

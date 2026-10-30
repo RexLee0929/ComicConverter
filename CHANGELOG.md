@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-10-30
+
+### 变更
+
+- 标题栏在程序名后显示版本号（`ComicConverter 1.0.3`），版本号仍只从 `version.props` 读，随构建自动更新
+- 安装包文件名带上版本号（`ComicConverter-1.0.3-setup.exe`），从 `version.props` 自动取，Releases 页里一眼能对上是哪个版本
+
+### 修复
+
+- 安装向导许可页的 MIT 原文不再整篇挤成一段（内嵌 LICENSE 是 LF 行尾，展示前统一转成 CRLF）
+
 ## [1.0.2] - 2026-10-30
 
 ### 新增
@@ -37,5 +48,6 @@
 - **断点续跑**：目标已存在记「跳过」，默认 6 并发（可 1–32）
 - **安装 / 卸载向导**：可选「仅为我安装」（无需管理员）或「为所有用户安装」（请求一次 UAC）
 
+[1.0.3]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/RexLee0929/ComicConverter/releases/tag/v1.0.1

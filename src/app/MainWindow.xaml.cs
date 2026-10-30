@@ -23,6 +23,8 @@ namespace ComicConverter
         {
             InitializeComponent();
 
+            // 标题栏 = 程序名 + 空格 + 版本号（版本唯一来源是 version.props，不写字面量）
+            Title = Brand.Name + " " + Brand.Version;
             TxtVersion.Text = "版本 " + Brand.Version;
             BuildMenu();
 

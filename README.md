@@ -12,7 +12,7 @@
 
 | 安装包 | 大小 | 适用 |
 |---|---|---|
-| `ComicConverter-Setup.exe` | 约 530 KB | 想要开始菜单 / 桌面快捷方式、能从「已安装的应用」里卸载 |
+| `ComicConverter-<版本>-setup.exe` | 约 530 KB | 想要开始菜单 / 桌面快捷方式、能从「已安装的应用」里卸载 |
 
 不需要装 Python、不需要 .NET SDK，只要系统自带 .NET Framework 4.8。
 
@@ -109,7 +109,7 @@
 
 ## 安装
 
-运行 `ComicConverter-Setup.exe`：
+运行安装包 `ComicConverter-<版本>-setup.exe`（Releases 页里最新下载的那个）：
 
 1. **欢迎** → **选择安装模式**
    - **仅为我安装**（默认）：`%LOCALAPPDATA%\Programs\ComicConverter`，不需要管理员权限

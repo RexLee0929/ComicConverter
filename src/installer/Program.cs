@@ -721,14 +721,22 @@ namespace ComicConverterSetup
         // ------------------------------------------------------------ 内嵌文本
         static string _license;
 
-        /// <summary>MIT 许可原文，安装时展示。</summary>
+        /// <summary>MIT 许可原文，安装时展示。填进 TextBox 前统一成 CRLF 行尾（规范 §三）。</summary>
         public static string License
         {
             get
             {
-                if (_license == null) _license = Resource("LICENSE", "MIT License");
+                if (_license == null) _license = ToCrlf(Resource("LICENSE", "MIT License"));
                 return _license;
             }
+        }
+
+        /// <summary>行尾统一成 \r\n。WinForms 的 TextBox 只认 CRLF，
+        /// 内嵌的 LICENSE 常是 LF 行尾，直接塞会整篇挤成一段。</summary>
+        public static string ToCrlf(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return s.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n");
         }
 
         static string _readme;
