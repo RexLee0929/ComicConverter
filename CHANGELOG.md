@@ -4,8 +4,6 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
-
 ## [1.0.2] - 2026-10-30
 
 ### 新增
@@ -39,6 +37,5 @@
 - **断点续跑**：目标已存在记「跳过」，默认 6 并发（可 1–32）
 - **安装 / 卸载向导**：可选「仅为我安装」（无需管理员）或「为所有用户安装」（请求一次 UAC）
 
-[未发布]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.2...HEAD
 [1.0.2]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/RexLee0929/ComicConverter/releases/tag/v1.0.1
