@@ -154,20 +154,43 @@ def main() -> int:
         dst = dest / rel
         if not src.is_file():
             continue
+        key = rel.as_posix()
         src_hash = sha256(src)
-        new_state[rel.as_posix()] = src_hash
         if not dst.is_file():
+            new_state[key] = src_hash
             add.append((src, rel, "新增"))
             continue
         dst_hash = sha256(dst)
         if dst_hash == src_hash:
+            new_state[key] = src_hash
             same.append(rel)
             continue
-        was = known.get(rel.as_posix())
+        was = known.get(key)
         if was is None or was == dst_hash or args.force:
+            new_state[key] = src_hash
             add.append((src, rel, "更新"))
         else:
+            # 冲突：目标在上次同步后被外部改过。这里绝不更新 new_state ——
+            # 一旦把「新源哈希」记成基准，下次比较时它依然不等于目标哈希，
+            # 冲突就会永久化（旧版 bug：冲突项也写状态，加 --force 才能脱身）。
             conflict.append((src, rel, "目标被外部改过"))
+
+    removed: list[Path] = []
+    if args.prune:
+        conflict_keys = {rel.as_posix() for _, rel, _ in conflict}
+        for k in known:
+            if k in new_state or k in conflict_keys:
+                continue
+            target = dest / k
+            if not target.is_file():
+                continue
+            # 源里已经没有这个文件了，没有「源哈希」可比 —— 只能拿状态里上次同步的
+            # 哈希当基准。目标哈希对不上，说明它在同步后被外部改过，绝不能因为
+            # 我们这边删了源就顺手抹掉（这一条是旧版直接删的，会丢内容）。
+            if not args.force and sha256(target) != known[k]:
+                conflict.append((None, Path(k), "源已删 / 目标被外部改过"))
+                continue
+            removed.append(Path(k))
 
     print(f"无变化 {len(same):>4} 个")
     for src, rel, tag in add:
@@ -175,16 +198,10 @@ def main() -> int:
     if conflict:
         print(f"冲突   {len(conflict):>4} 个（目标在上次同步后被改动，未覆盖）")
         for src, rel, tag in conflict:
-            print(f"  [!] {rel.as_posix()}")
+            print(f"  [!] {rel.as_posix()}  {tag}")
         print("      → 确认要覆盖请加 --force")
-
-    removed: list[Path] = []
-    if args.prune:
-        for k in known:
-            if k not in new_state and (dest / k).is_file():
-                removed.append(Path(k))
-        for r in removed:
-            print(f"  [删除] {r.as_posix()}")
+    for r in removed:
+        print(f"  [删除] {r.as_posix()}")
 
     if not args.apply:
         print("-" * 64)
@@ -193,6 +210,9 @@ def main() -> int:
 
     if not add and not removed:
         print("-" * 64)
+        if conflict:
+            print(f"× 有 {len(conflict)} 个冲突未处理，什么都没写。确认覆盖请加 --force")
+            return 1
         print("无需写入。")
         return 0
 
@@ -228,9 +248,13 @@ def main() -> int:
 
     print("-" * 64)
     print(f"完成：写入 {written}，删除 {len(removed)}。")
+    if conflict:
+        print(f"× 仍有 {len(conflict)} 个冲突未覆盖（状态已保留原基准），确认覆盖请加 --force")
     if backup_dir and backup_dir.is_dir():
         print(f"覆盖前的旧文件备份在: {backup_dir}")
-    return 0
+    # 有冲突就不能返回 0：否则外层（build.py / 发布脚本）会当成一切正常，
+    # 把旧文件当新版本推上去。
+    return 1 if conflict else 0
 
 
 if __name__ == "__main__":
