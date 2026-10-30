@@ -35,7 +35,7 @@
 
         <!-- 2) 联系条：作者 + 邮箱胶囊（点击即复制）+ 反馈位（平时为空） -->
         <Border Grid.Row="1" Background="{StaticResource CardAltBrush}" CornerRadius="8"
-                Padding="14,8" Margin="0,0,0,10">
+                Padding="14,9" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="作者  " FontSize="12" Foreground="{StaticResource MutedBrush}"
                            VerticalAlignment="Center"/>

@@ -355,13 +355,12 @@ namespace ComicConverter
                 Content = "打不开？点这里下载 WebView2 运行时",
                 Margin = new Thickness(0, 14, 0, 0),
                 Padding = new Thickness(14, 6, 14, 6),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Background = System.Windows.Media.Brushes.White,
-                BorderBrush = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0x0F, 0x6E, 0x56)),
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0x0F, 0x6E, 0x56))
+                HorizontalAlignment = HorizontalAlignment.Center
             };
+            // 品牌色一律走资源字典（Accent 派生），代码里不写色值——规范 §三
+            btn.SetResourceReference(System.Windows.Controls.Button.BackgroundProperty, "CardBrush");
+            btn.SetResourceReference(System.Windows.Controls.Button.BorderBrushProperty, "AccentBrush");
+            btn.SetResourceReference(System.Windows.Controls.Button.ForegroundProperty, "AccentBrush");
             btn.Click += delegate
             {
                 OpenUrl("https://developer.microsoft.com/microsoft-edge/webview2/");
