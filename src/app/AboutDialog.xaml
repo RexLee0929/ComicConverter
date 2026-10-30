@@ -1,0 +1,69 @@
+<Window x:Class="ComicConverter.AboutDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="关于 ComicConverter"
+        Width="640" Height="300" MinHeight="240"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource WindowBrush}"
+        FontFamily="Microsoft YaHei UI">
+
+    <!-- 三段式（与 txtFormat 同构）：内容框 / 联系条 / 按钮栏。
+         宽度固定 640（与 txtFormat 相同）；高度在 ContentRendered 后按富文本
+         的真实内容高度自动校正（AboutDialog.FitToContent），内容增删不用改任何数字。
+         不能用 SizeToContent 量高——WPF 对 RichTextBox 量出来偏小，会把后两段挤出窗口；
+         也不允许用户手动缩放（NoResize），MinHeight 只留 240 兜底。 -->
+    <Grid Margin="20,14,20,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 1) 内容框：富文本，文本可选中（txtFormat 用 QTextBrowser，这里用只读 RichTextBox 等价替代） -->
+        <Border Grid.Row="0" Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                CornerRadius="8" Padding="14,20,14,26" Margin="0,0,0,10">
+            <RichTextBox x:Name="Doc" IsReadOnly="True" IsDocumentEnabled="False"
+                         BorderThickness="0" Background="Transparent"
+                         Padding="0" Margin="0"
+                         FontSize="12" Foreground="{StaticResource InkBrush}"
+                         HorizontalScrollBarVisibility="Disabled"
+                         VerticalScrollBarVisibility="Hidden"
+                         IsTabStop="False" AcceptsReturn="False" AcceptsTab="False"/>
+        </Border>
+
+        <!-- 2) 联系条：作者 + 邮箱胶囊（点击即复制）+ 反馈位（平时为空） -->
+        <Border Grid.Row="1" Background="{StaticResource CardAltBrush}" CornerRadius="8"
+                Padding="14,8" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="作者  " FontSize="12" Foreground="{StaticResource MutedBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Author}" FontSize="12"
+                           Foreground="{StaticResource InkBrush}" VerticalAlignment="Center"/>
+                <Border x:Name="EmailChip" Background="{StaticResource CardBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="12" Padding="10,3" Margin="10,0,0,0"
+                        Cursor="Hand" MouseLeftButtonUp="Email_Click"
+                        ToolTip="点击复制邮箱">
+                    <StackPanel Orientation="Horizontal">
+                        <ContentControl x:Name="EmailIcon" Width="13" Height="13"
+                                        VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="EmailText" Text="{Binding Email}" FontSize="12"
+                                   Foreground="{StaticResource InkBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <!-- 平时为空；点击复制后在这里显示「已复制到剪贴板」，1.6 秒后自动消失 -->
+                <TextBlock x:Name="CopyHint" Text="" FontSize="11"
+                           Foreground="{DynamicResource AccentBrush}" Margin="10,0,0,0"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 3) 按钮栏：只有一个关闭按钮（复制已经由邮箱胶囊承担，不再单独放按钮） -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnClose" Style="{StaticResource PrimaryButton}" Content="关闭"
+                    MinWidth="88" IsDefault="True" IsCancel="True" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

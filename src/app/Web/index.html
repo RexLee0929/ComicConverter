@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComicConverter</title>
+<style>
+:root{--bg:#F3F3F3;--card:#FFFFFF;--line:#E8E8E8;--line2:#F3F3F3;--ink:#1B1B1B;
+--muted:#5C5C5C;--dim:#8C8C8C;--accent:#0F6E56;--soft:#E6F2EE;
+--warn:#8A5300;--warnbg:#FFF4CE;--err:#C42B1C}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;overflow:hidden;background:var(--bg);color:var(--ink);font-size:13px;line-height:1.5;
+font-family:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+-webkit-font-smoothing:antialiased;user-select:none}
+
+/* 三栏铺满，页面本身永不滚动 */
+main{height:100%;display:grid;gap:11px;padding:11px;
+grid-template-columns:minmax(310px,340px) minmax(310px,340px) minmax(0,1fr);overflow:hidden}
+.col{display:flex;flex-direction:column;gap:11px;min-height:0;min-width:0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:11px 13px;flex:none}
+.col3 .panel{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+.act{margin-top:auto}
+
+h2{font-size:11.5px;font-weight:600;margin:0 0 8px;color:var(--dim);letter-spacing:.2px}
+h2 .cnt{font-weight:400;color:var(--dim);margin-left:4px}
+.field{margin-bottom:9px}.field:last-child{margin-bottom:0}
+label.lbl{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+input[type=text],input[type=number]{width:100%;padding:5px 9px;border:1px solid #D9D9D9;
+border-bottom-color:#B3B3B3;border-radius:4px;background:#FBFBFB;color:var(--ink);
+font-size:12.5px;font-family:inherit;outline:none;transition:.12s;user-select:text}
+input:focus{background:#fff;border-color:var(--accent);border-bottom-width:2px;padding-bottom:4px}
+.row{display:flex;gap:6px}.row>*{min-width:0}.grow{flex:1}
+button{border:1px solid #D9D9D9;background:#FDFDFD;color:var(--ink);border-radius:4px;
+padding:5px 13px;font-size:12.5px;font-family:inherit;cursor:pointer;transition:.12s;
+white-space:nowrap;min-height:28px}
+button:hover{background:#F4F4F4;border-color:#C9C9C9}
+button:active{background:#EDEDED}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary:hover{background:#0B5A46;border-color:#0B5A46}
+button:disabled{opacity:.4;cursor:default}
+button.wide{width:100%;margin-top:5px}
+.seg{display:flex;background:#F0F0F0;border-radius:4px;padding:2px;gap:2px}
+.seg label{flex:1;text-align:center;padding:4px 3px;border-radius:3px;font-size:11.5px;
+cursor:pointer;color:var(--muted);transition:.12s;white-space:nowrap}
+.seg input{display:none}
+.seg input:checked+label{background:#fff;color:var(--accent);font-weight:600;
+box-shadow:0 1px 1.5px rgba(0,0,0,.1)}
+.hint{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.45}
+
+/* 源目录列表：内部滚动，不超过 3 行 */
+.list{max-height:104px;overflow-y:auto;overflow-x:hidden;min-height:28px}
+.srcrow{display:flex;gap:5px;margin-bottom:5px}
+.srcrow input{font-size:12px;padding:4px 8px}
+.srcrow button{min-height:26px;padding:3px 10px;font-size:12px}
+
+/* 开关：两列，省一半高度 */
+.switches{display:grid;grid-template-columns:1fr 1fr;gap:1px 16px;margin-top:2px}
+.switch{display:flex;align-items:center;justify-content:space-between;padding:2px 0;gap:8px}
+.switch .t{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.switch input{display:none}
+.switch .track{width:34px;height:18px;border-radius:9px;background:#FBFBFB;
+border:1px solid #8C8C8C;position:relative;transition:.15s;flex:none;cursor:pointer}
+.switch .track::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;
+border-radius:50%;background:#8C8C8C;transition:.15s}
+.switch input:checked+.track{background:var(--accent);border-color:var(--accent)}
+.switch input:checked+.track::after{transform:translateX(16px);background:#fff}
+
+/* 右栏 */
+.barwrap{height:4px;background:#E6E6E6;border-radius:2px;overflow:hidden;margin:2px 0 7px}
+.bar{height:100%;width:0;background:var(--accent);transition:width .3s;border-radius:2px}
+.stat{display:flex;gap:13px;font-size:11.5px;color:var(--muted);flex-wrap:wrap;margin-bottom:8px}
+.stat b{color:var(--ink);font-weight:600}
+.log{flex:1 1 0;min-height:90px;overflow-y:auto;background:#FAFAFA;border:1px solid var(--line);
+border-radius:6px;padding:7px 10px;font-family:Consolas,"Cascadia Mono",monospace;
+font-size:11px;line-height:1.6;user-select:text}
+.log div{white-space:pre-wrap;word-break:break-all}
+.log .t{color:#A0A0A0;margin-right:6px}
+.log .e{color:var(--err)}.log .w{color:var(--warn)}.log .s{color:var(--accent);font-weight:600}
+
+.prevwrap{flex:1 1 0;min-height:80px;overflow:auto}
+table.prev{width:100%;border-collapse:collapse;font-size:11.5px;user-select:text}
+table.prev th{text-align:left;padding:5px 8px;color:var(--muted);font-weight:600;
+border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:1}
+table.prev td{padding:4px 8px;border-bottom:1px solid var(--line2);vertical-align:top}
+table.prev td.n{color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+table.prev td.dir{white-space:nowrap}
+.pill{font-size:10px;padding:0 6px;border-radius:8px;background:var(--warnbg);
+color:var(--warn);font-weight:600}
+.tabs{display:flex;gap:4px}
+.tabs button{flex:1;font-size:12px;padding:5px 0}
+.tabs button.on{background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.empty{color:var(--dim);font-size:11.5px;padding:18px 0;text-align:center}
+
+#toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,10px);z-index:99;
+background:#1B1B1B;color:#fff;font-size:12.5px;padding:6px 15px;border-radius:16px;
+opacity:0;pointer-events:none;transition:.18s;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#toast.on{opacity:.94;transform:translate(-50%,0)}
+</style></head><body>
+
+<main>
+  <!-- 第一栏：任务与路径 -->
+  <section class="col">
+    <div class="panel">
+      <h2>任务类型</h2>
+      <div class="tabs">
+        <button id="tbConv" class="on" onclick="setMode('convert')">EPUB → CBZ</button>
+        <button id="tbRepack" onclick="setMode('repack')">格式互转</button>
+      </div>
+      <div class="hint" id="modeHint"></div>
+    </div>
+
+    <div class="panel">
+      <h2>源目录<span class="cnt" id="srcCount"></span></h2>
+      <div class="list" id="srcList"></div>
+      <button class="wide" onclick="addSrc('')">+ 添加目录</button>
+      <div class="hint" id="srcHint"></div>
+    </div>
+
+    <div class="panel">
+      <h2>输出目录</h2>
+      <div class="row">
+        <input type="text" id="out" class="grow" placeholder="例如 E:/temp/Library">
+        <button onclick="pick('out')">浏览</button>
+      </div>
+    </div>
+
+    <div class="panel act">
+      <div class="row">
+        <button class="grow" id="btnPrev" onclick="doPreview()">预演</button>
+        <button class="grow primary" id="btnStart" onclick="doStart()">开始</button>
+        <button id="btnStop" onclick="doStop()" disabled>停止</button>
+      </div>
+      <div class="hint">预演只读元数据，不写任何文件。</div>
+    </div>
+  </section>
+
+  <!-- 第二栏：目标与阅读设置 -->
+  <section class="col">
+    <div class="panel">
+      <h2>目标服务器</h2>
+      <div class="seg">
+        <input type="radio" name="target" id="tg_both" value="both"><label for="tg_both">双兼容</label>
+        <input type="radio" name="target" id="tg_kav" value="kavita"><label for="tg_kav">Kavita</label>
+        <input type="radio" name="target" id="tg_kom" value="komga"><label for="tg_kom">Komga</label>
+      </div>
+      <div class="hint" id="targetHint"></div>
+      <div class="field" style="margin-top:9px">
+        <label class="lbl">文件名模板</label>
+        <input type="text" id="tpl">
+        <div class="hint">变量：{series} {vol} {vol3}　·　原卷标签自动加在末尾括号内</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>阅读设置</h2>
+      <div class="field">
+        <label class="lbl">阅读方向</label>
+        <div class="seg">
+          <input type="radio" name="reading" id="rd_auto" value="auto"><label for="rd_auto">自动判断</label>
+          <input type="radio" name="reading" id="rd_rtl" value="rtl"><label for="rd_rtl">右开本</label>
+          <input type="radio" name="reading" id="rd_ltr" value="ltr"><label for="rd_ltr">左开本</label>
+          <input type="radio" name="reading" id="rd_ttb" value="ttb"><label for="rd_ttb">上到下</label>
+        </div>
+        <div class="hint" id="readHint"></div>
+      </div>
+      <div class="field">
+        <label class="lbl">繁转简</label>
+        <div class="seg">
+          <input type="radio" name="t2s" id="cc_none" value=""><label for="cc_none">不转</label>
+          <input type="radio" name="t2s" id="cc_tw" value="tw2s"><label for="cc_tw">台湾正体</label>
+          <input type="radio" name="t2s" id="cc_t" value="t2s"><label for="cc_t">通用繁体</label>
+        </div>
+        <div class="hint">含假名的日文标题整条保留。</div>
+      </div>
+      <div class="field">
+        <label class="lbl">番外 / 特别篇</label>
+        <div class="seg">
+          <input type="radio" name="special" id="sp_series" value="series"><label for="sp_series">独立成系列</label>
+          <input type="radio" name="special" id="sp_num" value="number"><label for="sp_num">接在正传后</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>打包与性能</h2>
+      <div class="row" style="align-items:flex-end">
+        <div class="grow">
+          <label class="lbl">压缩方式</label>
+          <div class="seg">
+            <input type="radio" name="compress" id="cp_store" value="store"><label for="cp_store">不压缩</label>
+            <input type="radio" name="compress" id="cp_def" value="deflate"><label for="cp_def">Deflate</label>
+          </div>
+        </div>
+        <div style="width:78px">
+          <label class="lbl">并发数</label>
+          <input type="number" id="jobs" min="1" max="32">
+        </div>
+      </div>
+      <div class="switches">
+        <div class="switch"><span class="t">保留原卷标签</span>
+          <input type="checkbox" id="keepLabel"><label class="track" for="keepLabel"></label></div>
+        <div class="switch"><span class="t">剔除站点水印页</span>
+          <input type="checkbox" id="dropJunk"><label class="track" for="dropJunk"></label></div>
+        <div class="switch"><span class="t">覆盖已存在文件</span>
+          <input type="checkbox" id="overwrite"><label class="track" for="overwrite"></label></div>
+        <div class="switch"><span class="t">只处理前 N 个</span>
+          <input type="checkbox" id="useLimit"><label class="track" for="useLimit"></label></div>
+      </div>
+      <div class="field" id="limitWrap" style="display:none;margin-top:7px">
+        <input type="number" id="limit" min="1">
+      </div>
+    </div>
+  </section>
+
+  <!-- 第三栏：进度与结果 -->
+  <section class="col col3">
+    <div class="panel">
+      <h2>进度</h2>
+      <div class="barwrap"><div class="bar" id="bar"></div></div>
+      <div class="stat">
+        <span id="phase">待命</span>
+        <span>完成 <b id="sDone">0</b>/<b id="sTotal">0</b></span>
+        <span style="color:var(--accent)">成功 <b id="sOk">0</b></span>
+        <span style="color:var(--warn)">跳过 <b id="sSkip">0</b></span>
+        <span style="color:var(--err)">失败 <b id="sErr">0</b></span>
+      </div>
+      <div class="log" id="log"><div class="empty">暂无日志</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>预演结果<span class="cnt" id="prevCount"></span></h2>
+      <div class="prevwrap" id="prevBox"><div class="empty">点「预演」查看命名结果</div></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+let MODE = 'convert', saveTimer, booting = true;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function setMode(m, silent){
+  MODE = m;
+  $('tbConv').classList.toggle('on', m === 'convert');
+  $('tbRepack').classList.toggle('on', m === 'repack');
+  $('modeHint').textContent = m === 'convert'
+    ? '从原始 EPUB 生成 CBZ，按 OPF 页序重排并写入元数据。'
+    : '把已有 CBZ 在 Kavita / Komga 的命名与元数据格式之间互转，图片字节不动。';
+  $('srcHint').textContent = m === 'convert'
+    ? '可添加多个目录，递归查找其中的 EPUB。' : '可添加多个目录，递归查找其中的 CBZ。';
+  $('btnPrev').style.display = m === 'convert' ? '' : 'none';
+  if (!silent) saveCfg();
+  report();
+}
+
+function countSrc(){
+  const n = document.querySelectorAll('#srcList .srcrow').length;
+  $('srcCount').textContent = n ? '　' + n + ' 个' : '';
+}
+
+function addSrc(v){
+  const d = document.createElement('div');
+  d.className = 'srcrow';
+  d.innerHTML = '<input type="text" placeholder="例如 V:/Comic/Comic" value="' + esc(v || '') + '">'
+    + '<button onclick="pick(this.previousElementSibling)">浏览</button>'
+    + '<button onclick="this.parentNode.remove();countSrc();saveCfg()">×</button>';
+  d.firstElementChild.addEventListener('input', saveCfg);
+  $('srcList').appendChild(d);
+  countSrc();
+}
+
+async function pick(el){
+  if (typeof el === 'string') el = $(el);
+  const j = await (await fetch('/api/pick', {method:'POST', body:'{}'})).json();
+  if (j.path && !j.path.startsWith('ERR:')) { el.value = j.path; saveCfg(); }
+  else if (j.path) alert('无法打开目录选择框，请手动输入路径。\n' + j.path);
+}
+
+function getCfg(){
+  const pickR = n => document.querySelector('input[name=' + n + ']:checked').value;
+  return {
+    sources: [...document.querySelectorAll('#srcList input')].map(i => i.value.trim()).filter(Boolean),
+    out: $('out').value.trim(),
+    target: pickR('target'), reading: pickR('reading'),
+    t2s: pickR('t2s') || null, compress: pickR('compress'), special: pickR('special'),
+    name_template: $('tpl').value.trim() || '{series} v{vol:02d}',
+    name_template_komga: '{series} #{vol3}',
+    jobs: parseInt($('jobs').value) || 6,
+    overwrite: $('overwrite').checked, drop_junk: $('dropJunk').checked,
+    keep_label: $('keepLabel').checked,
+    limit: $('useLimit').checked ? (parseInt($('limit').value) || 0) : 0,
+    mode: MODE
+  };
+}
+
+function saveCfg(){
+  if (booting) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({cfg: getCfg()})});
+    report({saved:'已保存'});
+    setTimeout(() => report({saved:''}), 1200);
+  }, 400);
+}
+
+/* 把界面上的模式/方向/目标回传给主窗口：菜单勾号与状态栏都靠这条通道同步 */
+function report(extra){
+  try{
+    if (window.chrome && window.chrome.webview){
+      const payload = Object.assign({
+        mode: MODE,
+        reading: document.querySelector('input[name=reading]:checked').value,
+        target: document.querySelector('input[name=target]:checked').value,
+        targetText: {both:'双兼容', kavita:'Kavita', komga:'Komga'}[
+          document.querySelector('input[name=target]:checked').value] || '双兼容',
+        readingText: {auto:'自动', rtl:'右开本', ltr:'左开本', ttb:'上到下'}[
+          document.querySelector('input[name=reading]:checked').value] || '自动',
+        jobs: parseInt($('jobs').value) || 6
+      }, extra || {});
+      window.chrome.webview.postMessage(JSON.stringify(payload));
+    }
+  }catch(e){}
+}
+
+function setTargetHint(){
+  const t = document.querySelector('input[name=target]:checked').value;
+  const h = $('targetHint');
+  if (t === 'both'){ h.textContent = 'Volume 与 Number 都写，番外单独归类，两边都能正确排序。'; $('tpl').value = '{series} v{vol:02d}'; }
+  if (t === 'kavita'){ h.textContent = '按 Volume 排序，文件名用 v01 形式。'; $('tpl').value = '{series} v{vol:02d}'; }
+  if (t === 'komga'){ h.textContent = '按 Number 排序，文件名用 #001 形式，番外可用小数号插入正传。'; $('tpl').value = '{series} #{vol3}'; }
+}
+
+function setReadHint(){
+  const h = $('readHint');
+  const v = document.querySelector('input[name=reading]:checked').value;
+  if (v === 'auto') h.textContent = '长条页判为上到下；否则按系列名与作者查证始发国：日本右开本，中/港台/韩左开本。'
+    + '结论写入 ComicInfo 并缓存，下次不联网。';
+  else if (v === 'rtl') h.textContent = '固定右开本：ComicInfo 的 Manga 写 YesAndRightToLeft。';
+  else if (v === 'ltr') h.textContent = '固定左开本：ComicInfo 的 Manga 写 No。';
+  else h.textContent = '固定上到下：适合条漫，Manga 写 No 并标注 ReadingMode=ttb。';
+}
+
+async function loadCfg(){
+  const j = await (await fetch('/api/config')).json();
+  const c = j.cfg || {};
+  $('srcList').innerHTML = '';
+  (c.sources && c.sources.length ? c.sources : []).forEach(s => addSrc(s));
+  if (!c.sources || !c.sources.length) addSrc('');
+  countSrc();
+  $('out').value = c.out || '';
+  const setR = (n, v) => { const e = document.querySelector('input[name=' + n + '][value="' + v + '"]'); if (e) e.checked = true; };
+  setR('target', c.target || 'both');
+  setR('reading', c.reading || 'auto');
+  setR('t2s', c.t2s === null ? '' : (c.t2s || 'tw2s'));
+  setR('compress', c.compress || 'store');
+  setR('special', c.special || 'series');
+  $('jobs').value = c.jobs || 6;
+  $('keepLabel').checked = c.keep_label !== false;
+  $('dropJunk').checked = c.drop_junk !== false;
+  $('overwrite').checked = !!c.overwrite;
+  $('useLimit').checked = (c.limit || 0) > 0;
+  $('limit').value = c.limit || 20;
+  $('limitWrap').style.display = $('useLimit').checked ? '' : 'none';
+  setMode(c.mode || 'convert', true);
+  setTargetHint();
+  setReadHint();
+  $('tpl').value = c.name_template || $('tpl').value;
+  booting = false;
+}
+
+async function doPreview(){
+  const cfg = getCfg();
+  if (!cfg.sources.length) return alert('请先添加源目录');
+  $('prevBox').innerHTML = '<div class="empty">扫描中…</div>';
+  const j = await (await fetch('/api/preview', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)})).json();
+  if (j.err){ $('prevBox').innerHTML = '<div class="empty">出错：' + esc(j.err) + '</div>'; return; }
+  const rows = j.rows || [];
+  $('prevCount').textContent = '　共 ' + rows.length + ' 个';
+  if (!rows.length){ $('prevBox').innerHTML = '<div class="empty">没有找到文件</div>'; return; }
+  const DL = {rtl:'右开本', ltr:'左开本', ttb:'上到下'};
+  let h = '<table class="prev"><thead><tr><th>系列目录</th><th>文件名</th><th>方向</th><th>页</th></tr></thead><tbody>';
+  rows.slice(0, 600).forEach(x => {
+    h += '<tr><td>' + esc(x.folder) + (x.special ? ' <span class="pill">番外</span>' : '') + '</td>'
+       + '<td>' + esc(x.file) + '</td>'
+       + '<td class="dir">' + (DL[x.dir] || '—') + (x.country ? ' ' + esc(x.country) : '') + '</td>'
+       + '<td class="n">' + x.pages + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if (rows.length > 600) h += '<div class="hint">仅显示前 600 条</div>';
+  $('prevBox').innerHTML = h;
+}
+
+async function doStart(){
+  const cfg = getCfg();
+  if (!cfg.sources.length) return alert('请先添加源目录');
+  if (!cfg.out) return alert('请填写输出目录');
+  $('btnStart').disabled = true; $('btnStop').disabled = false;
+  const j = await (await fetch('/api/start', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)})).json();
+  if (j.err){ alert(j.err); $('btnStart').disabled = false; }
+}
+
+async function doStop(){ await fetch('/api/stop', {method:'POST', body:'{}'}); }
+
+let lastLog = -1;
+async function poll(){
+  try{
+    const j = await (await fetch('/api/status')).json();
+    $('phase').textContent = j.phase || '待命';
+    $('sDone').textContent = j.done; $('sTotal').textContent = j.total;
+    $('sOk').textContent = j.ok; $('sSkip').textContent = j.skip; $('sErr').textContent = j.err;
+    $('bar').style.width = (j.total ? Math.min(100, j.done / j.total * 100) : 0) + '%';
+    $('btnStart').disabled = j.running;
+    $('btnStop').disabled = !j.running;
+    report({phase: j.phase || '待命',
+      count: '完成 ' + (j.done||0) + '/' + (j.total||0),
+      current: j.current || ''});
+    if (j.log.length !== lastLog){
+      lastLog = j.log.length;
+      const b = $('log');
+      b.innerHTML = j.log.length ? j.log.map(x => '<div class="' + (x.l === 'i' ? '' : x.l) + '">'
+        + '<span class="t">' + x.t + '</span>' + esc(x.m) + '</div>').join('')
+        : '<div class="empty">暂无日志</div>';
+      b.scrollTop = b.scrollHeight;
+    }
+  }catch(e){}
+}
+
+document.addEventListener('change', e => {
+  if (e.target.name === 'target'){ setTargetHint(); saveCfg(); }
+  else {
+    if (e.target.name === 'reading') setReadHint();
+    saveCfg();
+  }
+});
+$('useLimit').addEventListener('change', e => {
+  $('limitWrap').style.display = e.target.checked ? '' : 'none';
+});
+document.querySelectorAll('#out,#tpl,#jobs,#limit').forEach(el =>
+  el.addEventListener('input', saveCfg));
+
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('on'), 1600);
+}
+
+/* 菜单栏由主窗口调用，页面只暴露动作 */
+window.UI = {
+  addSource(){ addSrc(''); },
+  pickOut(){ pick('out'); },
+  setMode(m){ setMode(m); },
+  setReading(v){
+    const e = document.querySelector('input[name=reading][value="' + v + '"]');
+    if (e){ e.checked = true; setReadHint(); saveCfg(); }
+  },
+  setTarget(v){
+    const e = document.querySelector('input[name=target][value="' + v + '"]');
+    if (e){ e.checked = true; setTargetHint(); saveCfg(); }
+  },
+  clearLog(){ lastLog = -1; $('log').innerHTML = '<div class="empty">暂无日志</div>'; },
+  clearPreview(){
+    $('prevBox').innerHTML = '<div class="empty">点「预演」查看命名结果</div>';
+    $('prevCount').textContent = '';
+  },
+  reload(){ booting = true; loadCfg(); },
+  report(){ report(); },
+  toast(m){ toast(m); }
+};
+
+loadCfg().then(() => { report(); });
+setInterval(poll, 900);
+poll();
+</script></body></html>
