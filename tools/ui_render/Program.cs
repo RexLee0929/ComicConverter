@@ -76,6 +76,25 @@ namespace ComicRenderer
             ShotPopup(menu, "工具", outDir, "menu-tools.png", false);
             ShotPopup(menu, "帮助", outDir, "menu-help.png", false);
 
+            // 2b) 启动画面图标：BrandIcon 必须给出 ico 里的最大帧。
+            //     WPF 的 ICO 解码器会把帧序重排（首帧只有 48px），
+            //     直接 Source="app.ico" 拿 48px 源去填 60px 启动位会发虚。
+            var bi = ComicConverter.BrandIcon.Source;
+            if (bi == null)
+                Failures.Add("BrandIcon.Source 取不到（" + ComicConverter.BrandIcon.LastError + "）");
+            else
+            {
+                Console.WriteLine("brand icon = " + bi.PixelWidth + "x" + bi.PixelHeight);
+                if (bi.PixelWidth < 256)
+                    Failures.Add("BrandIcon 只取到 " + bi.PixelWidth + "px 帧（应挑最大帧 256）");
+                var splash = new StackPanel();
+                splash.Children.Add(new Image { Source = bi, Width = 60, Height = 60 });
+                splash.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                splash.Arrange(new Rect(0, 0, 60, 60));
+                splash.UpdateLayout();
+                Save(splash, Path.Combine(outDir, "splash-icon.png"));
+            }
+
             // 3) 关于对话框
             var about = new ComicConverter.AboutDialog { ShowInTaskbar = false, Left = -4000, Top = 0 };
             about.Show();
@@ -223,6 +242,15 @@ namespace ComicRenderer
             Pump(500);
 
             var popup = top.Template.FindName("PART_Popup", top) as System.Windows.Controls.Primitives.Popup;
+            if (popup == null || !popup.IsOpen)
+            {
+                // 偶发：宿主忙时 500ms 不够弹层展开，收起重开一次再判失败
+                top.IsSubmenuOpen = false;
+                Pump(200);
+                top.IsSubmenuOpen = true;
+                Pump(900);
+                popup = top.Template.FindName("PART_Popup", top) as System.Windows.Controls.Primitives.Popup;
+            }
             if (popup == null || !popup.IsOpen)
             {
                 Failures.Add("「" + word + "」弹层没打开（PART_Popup 缺失或未展开）");

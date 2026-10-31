@@ -4,6 +4,16 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.6] - 2026-11-01
+
+### 变更
+
+- 程序与安装包换成新图标（多尺寸重绘，窗口、任务栏、资源管理器和安装向导里都是同一套）
+
+### 修复
+
+- 启动画面和标题栏的图标发虚：WPF 解码 `app.ico` 时首帧只有 48px，放到 60px 的启动位和高缩放的标题栏上要拉大；现在总是挑 ico 里的最大帧（256×256），各处放大显示都清晰
+
 ## [1.0.5] - 2026-10-31
 
 ### 新增
@@ -105,6 +115,7 @@
 - **断点续跑**：目标已存在记「跳过」，默认 6 并发（可 1–32）
 - **安装 / 卸载向导**：可选「仅为我安装」（无需管理员）或「为所有用户安装」（请求一次 UAC）
 
+[1.0.6]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.2...v1.0.3

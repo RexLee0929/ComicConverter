@@ -29,7 +29,9 @@
 
             <Border x:Name="Splash" Background="#F3F3F3">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Image Source="app.ico" Width="60" Height="60"
+                    <!-- Source 是兜底：WPF 解码器首帧只有 48px，构造函数里会用
+                         BrandIcon 的最大帧（256）覆盖，见 BrandIcon.cs 的说明 -->
+                    <Image x:Name="SplashIcon" Source="app.ico" Width="60" Height="60"
                            RenderOptions.BitmapScalingMode="HighQuality"
                            HorizontalAlignment="Center" Margin="0,0,0,16"/>
                     <TextBlock Text="ComicConverter" FontSize="17" FontWeight="SemiBold"

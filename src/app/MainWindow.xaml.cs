@@ -25,6 +25,16 @@ namespace ComicConverter
         {
             InitializeComponent();
 
+            // 窗口/任务栏图标与启动画面：用 BrandIcon 挑出的最大帧。
+            // XAML 里写的 app.ico 是兜底 —— WPF 的 ICO 解码器首帧只有 48px，
+            // 高 DPI 下标题栏和启动位会被放大发虚（详见 BrandIcon.cs）。
+            var brand = BrandIcon.Source;
+            if (brand != null)
+            {
+                Icon = brand;
+                SplashIcon.Source = brand;
+            }
+
             // 标题栏 = 程序名 + 空格 + 版本号（版本唯一来源是 version.props，不写字面量）
             Title = Brand.Name + " " + Brand.Version;
             TxtVersion.Text = "版本 " + Brand.Version;

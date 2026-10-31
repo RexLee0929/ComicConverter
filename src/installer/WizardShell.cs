@@ -49,15 +49,19 @@ namespace ComicConverterSetup
             Font = _uiFont;
             ClientSize = new Size(width, height);
 
-            // 图标是整套配色的唯一种子：先取它，再算 Theme，再画界面
+            // 图标是整套配色的唯一种子：先取它，再算 Theme，再画界面。
+            // ExtractAssociatedIcon 固定只返回 32×32（ico 里有多少帧都一样），
+            // 之前再 new Icon(ico, 256, 256) 等于 32→256→64 两次重采样，
+            // 侧栏 logo 被拉糊了。PrivateExtractIcons 会按请求尺寸挑帧，
+            // 要 256 就拿真 256 帧。取不到再退回老 API 兜底。
             try
             {
-                var ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-                if (ico != null)
+                var big = FrameIcon(256);
+                if (big != null)
                 {
-                    Icon = ico;
-                    using (var big = new Icon(ico, 256, 256))
-                        _appIcon = big.ToBitmap();
+                    _appIcon = big.ToBitmap();
+                    big.Dispose();
+                    Icon = FrameIcon(32) ?? Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
                     Theme.Build(_appIcon);
 
@@ -66,6 +70,36 @@ namespace ComicConverterSetup
                 }
             }
             catch { }
+        }
+
+        // ------------------------------------------------------------------
+        // 品牌图标：PrivateExtractIconsW 按尺寸取 exe 内嵌资源里的帧。
+        // ExtractAssociatedIcon 永远只给 32×32，多帧 ico 也一样。
+        // ------------------------------------------------------------------
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern uint PrivateExtractIconsW(string file, int index, int cx, int cy,
+            IntPtr[] icons, int[] ids, int count, int flags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool DestroyIcon(IntPtr handle);
+
+        /// <summary>按尺寸从自己的 exe 里取一帧图标（自有句柄，用完可 Dispose）；失败返回 null。</summary>
+        static Icon FrameIcon(int size)
+        {
+            try
+            {
+                var h = new IntPtr[1];
+                if (PrivateExtractIconsW(Application.ExecutablePath, 0, size, size, h, null, 1, 0) > 0
+                    && h[0] != IntPtr.Zero)
+                {
+                    var owned = (Icon)Icon.FromHandle(h[0]).Clone();   // 克隆成自有句柄，原句柄销毁
+                    DestroyIcon(h[0]);
+                    return owned;
+                }
+            }
+            catch { }
+            return null;
         }
 
         protected override void OnLoad(EventArgs e)

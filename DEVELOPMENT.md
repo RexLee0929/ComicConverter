@@ -39,12 +39,7 @@ cd ../installer && dotnet build -c Release
 
 ## 图标与配色
 
-两份 `app.ico` 由脚本生成，纯标准库，不依赖 Pillow：
-
-```bash
-python tools/make_icon.py                    # 重新生成 src/app 和 src/installer 下的 .ico
-python tools/make_icon.py --preview p.png    # 顺便导出 256px 预览
-```
+图标就是 `src/app/app.ico` 和 `src/installer/app.ico` 两份文件，直接改图、直接提交，没有生成脚本（原来的 `make_icon.py` 已删）。两份内容保持一致。
 
 强调色没有写死。`Accent.cs` 在启动时读 `app.ico` 的像素，取主色再派生出浅底、深底、边框几个值，塞进 `Application.Resources`。网页那边是另一套：`Page.cs` 把 `index.html` 里三个占位色值替换成实际颜色再发出去。换图标之后两边一起变，但要注意网页里的色值是**故意留的占位符**，不是漏改的硬编码。
 
@@ -68,7 +63,9 @@ src/app/           主程序
   Page.cs          下发 index.html，替换品牌色
   AboutDialog.xaml 关于窗
   AboutDoc.cs      Markdown → FlowDocument
+  BrandIcon.cs     从 app.ico 挑最大帧当品牌图标（启动画面 / 窗口图标）
   Web/index.html   界面
+  app.ico          程序图标（与 src/installer/app.ico 保持一致）
 src/installer/     安装 / 卸载向导（WinForms）
   WizardShell.cs   向导外壳（页面切换、按钮布局）
   Controls.cs      自绘控件（标题、正文、进度条）
@@ -80,7 +77,6 @@ src/installer/     安装 / 卸载向导（WinForms）
 src/version.props  版本与作者信息
 tools/
   build.py         构建入口
-  make_icon.py     生成图标
   sync_to_code.py  把当前目录同步到另一个发布目录（按哈希比较，目标被外部改过就跳过）
   ui_render/       界面离屏渲染器（含菜单结构自检）
   _shot_page.py    用无头 Chrome 渲染 Web/index.html（确认条 / 提示条）；下划线开头，只在本机用
@@ -99,10 +95,11 @@ tools/
 dotnet run -c Release --project tools/ui_render -- tools/_shots/ui
 ```
 
-会输出 `menu-bar.png`、`menu-convert.png`、`menu-output.png`、`menu-tools.png`、`menu-help.png`、`about.png`、`about-copied.png`、`dlg-error.png`，同时自检：
+会输出 `menu-bar.png`、`menu-convert.png`、`menu-output.png`、`menu-tools.png`、`menu-help.png`、`about.png`、`about-copied.png`、`dlg-error.png`、`splash-icon.png`，同时自检：
 
 - 菜单结构（一级 ≥ 2 栏、每栏至少一项可用、有「帮助」、其下有 `about` 命令）—— 任一条不满足会打印 `!` 并以退出码 1 结束；
-- 每个弹层真的打开了（`popup.IsOpen`），按标题找一级菜单，不用 `Items[n]` 索引（加一栏就错位）；
+- 每个弹层真的打开了（`popup.IsOpen`），按标题找一级菜单，不用 `Items[n]` 索引（加一栏就错位）；宿主忙时弹层偶尔没展开，会收起重开一次再判失败；
+- 启动画面图标取的是 `BrandIcon` 挑出的最大帧（宽 ≥ 256 才算过，取不到直接报失败）；
 - 关于窗的富文本没有溢出（`ExtentHeight` 与 `ViewportHeight` 对比）、`PagePadding` 仍是 `0,0,0,0`。
 
 页面（Web/index.html）用无头 Chrome 看：`python tools/_shot_page.py confirm` 会打桩 `fetch`、调起内联确认条再截图，`toast` 同理。
@@ -111,6 +108,8 @@ dotnet run -c Release --project tools/ui_render -- tools/_shots/ui
 
 ## 几个坑
 
+- **WPF 解码 ico 会重排帧序，首帧只有 48px**（本机实测顺序：48, 64, 32, 24, 128, 16, 256）。直接写 `Source="app.ico"` 拿到的永远是 48px 首帧，放到 60px 启动位、高缩放标题栏上就发虚。图标一律走 `BrandIcon.Source`（`BitmapDecoder` 遍历全部帧挑最大），XAML 里的 `Source` 只作兜底。
+- **相对的 pack URI 按入口程序集解析**：`pack://application:,,,/app.ico` 在主程序里没问题，在 `ui_render` 这类引用主程序集的外壳工具里就找不到资源。库代码里要写显式的 `pack://application:,,,/ComicConverter;component/app.ico`（`Accent.cs`、`BrandIcon.cs` 都已这么写）。
 - **`VisualBrush` 不含 Margin**。离屏渲染按元素内容区截的话，截出来会像是「按钮贴底、卡片右边框没了」，其实是渲染器的问题。`ui_render` 里已经改成按 Margin 偏移绘制。
 - **`RichTextBox.Document` 赋值后 `PagePadding` 会被强制改回 `5,0,5,0`**，赋值时设一次没用 —— 必须在 `Doc.Loaded` 之后再压一次，并且每次自适应高度都顺手压（`AboutDialog.ZeroPadding`）。漏掉的现象是正文整体右移 5px，跟卡片内边距对不齐。
 - **`FlowDocument` 不计首段上边距和末段下边距**，所以关于窗卡片的上下留白只能放在 Border 的内边距里，放段落 Margin 上不会生效。
