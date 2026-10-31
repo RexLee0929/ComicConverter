@@ -141,8 +141,11 @@ namespace ComicConverterSetup
         }
 
         public static InstallMode Mode = InstallMode.PerUser;
-
-        public static bool IsAllUsers { get { return Mode == InstallMode.AllUsers; } }
+        /// <summary>
+        /// 提权重启后从第几页接着走（`--resume=N`，0 或未给表示正常从头开始）。
+        /// 申请提权只能发生在「选择安装模式」页，所以值为 2（许可协议）。
+        /// </summary>
+        public static int ResumePage;
 
         static bool? _elevated;
 
@@ -193,9 +196,9 @@ namespace ComicConverterSetup
         public static string ReadmePathIn(string dir) { return Path.Combine(dir, ReadmeName); }
 
         /// <summary>用户配置文件。安装时不覆盖（payload 里没有它），卸载时默认保留。</summary>
-        public const string ConfigName = "config.json";
+        public const string SettingsName = "config.json";
 
-        public static string ConfigPathIn(string dir) { return Path.Combine(dir, ConfigName); }
+        public static string SettingsPathIn(string dir) { return Path.Combine(dir, SettingsName); }
 
         /// <summary>目标目录里是否已有用户配置 —— 决定「选择安装位置」页要不要显示覆盖选项。</summary>
         public static bool HasConfig(string dir)
@@ -203,7 +206,7 @@ namespace ComicConverterSetup
             try
             {
                 if (string.IsNullOrEmpty(dir) || !Path.IsPathRooted(dir)) return false;
-                return File.Exists(ConfigPathIn(dir));
+                return File.Exists(SettingsPathIn(dir));
             }
             catch { return false; }
         }
@@ -217,6 +220,26 @@ namespace ComicConverterSetup
                        && dir.StartsWith(pf, StringComparison.OrdinalIgnoreCase);
             }
             catch { return false; }
+        }
+
+        /// <summary>
+        /// 本机装在**别处**的那一份：已装位置与 <paramref name="dir"/> 不同才返回路径。
+        /// 给「选择安装位置」页用 —— 已装过、这次又换了安装模式时，不能让页面看着像首次安装。
+        /// </summary>
+        public static string OtherInstalledDir(string dir)
+        {
+            try
+            {
+                var installed = InstalledDir();
+                if (string.IsNullOrEmpty(installed)) return null;
+                if (!string.IsNullOrEmpty(dir) && Path.IsPathRooted(dir)
+                    && string.Equals(Path.GetFullPath(installed).TrimEnd('\\'),
+                                     Path.GetFullPath(dir).TrimEnd('\\'),
+                                     StringComparison.OrdinalIgnoreCase))
+                    return null;
+                return Directory.Exists(installed) ? installed : null;
+            }
+            catch { return null; }
         }
 
         // ------------------------------------------------------------ 目录位置
@@ -261,49 +284,62 @@ namespace ComicConverterSetup
         }
 
         // ------------------------------------------------------------ 注册表
-        static RegistryKey OpenUninstallKey(bool allUsers, bool writable)
+        /// <summary>
+        /// 打开卸载登记项。**视图显式指定**：本进程是 32 位（AnyCPU + Prefer32Bit），
+        /// `RegistryView.Default` 会落到 `HKCU\Software\WOW6432Node\…` 下，
+        /// 而 64 位的「设置 → 应用」读的是 `HKCU\Software\…` —— 卸载项写进去等于没写。
+        /// 所以写入统一用 64 位视图；读取要连 32 位视图一起看，1.0.4 及更早版本写的是那里。
+        /// </summary>
+        static RegistryKey OpenUninstallKey(bool allUsers, RegistryView view, bool writable)
         {
             var hive = allUsers ? RegistryHive.LocalMachine : RegistryHive.CurrentUser;
-            var view = (allUsers && Environment.Is64BitOperatingSystem)
-                ? RegistryView.Registry64
-                : RegistryView.Default;
-
             var root = RegistryKey.OpenBaseKey(hive, view);
             return writable ? root.CreateSubKey(UninstallSubKey) : root.OpenSubKey(UninstallSubKey);
         }
 
-        /// <summary>已安装的目录：先找「所有用户」，再找「当前用户」。</summary>
+        static readonly RegistryView[] Views =
+            { RegistryView.Registry64, RegistryView.Registry32 };
+
+        /// <summary>已安装的目录：先找「所有用户」，再找「当前用户」；两个注册表视图都看。</summary>
         public static string InstalledDir()
         {
             foreach (var all in new[] { true, false })
             {
-                try
+                foreach (var view in Views)
                 {
-                    using (var k = OpenUninstallKey(all, false))
+                    try
                     {
-                        var v = k == null ? null : k.GetValue("InstallLocation") as string;
-                        if (!string.IsNullOrEmpty(v)) return v;
+                        using (var k = OpenUninstallKey(all, view, false))
+                        {
+                            var v = k == null ? null : k.GetValue("InstallLocation") as string;
+                            if (!string.IsNullOrEmpty(v)) return v;
+                        }
                     }
+                    catch { }
                 }
-                catch { }
             }
             return null;
         }
 
         public static bool InstalledForAllUsers()
         {
-            try
+            foreach (var view in Views)
             {
-                using (var k = OpenUninstallKey(true, false)) return k != null;
+                try
+                {
+                    using (var k = OpenUninstallKey(true, view, false)) if (k != null) return true;
+                }
+                catch { }
             }
-            catch { return false; }
+            return false;
         }
 
         static void WriteUninstallEntry(string dir, InstallMode mode)
         {
             try
             {
-                using (var k = OpenUninstallKey(mode == InstallMode.AllUsers, true))
+                // 写入固定 64 位视图：无论本进程是多少位，64 位的应用列表都能读到
+                using (var k = OpenUninstallKey(mode == InstallMode.AllUsers, RegistryView.Registry64, true))
                 {
                     if (k == null) return;
                     k.SetValue("DisplayName", AppName);
@@ -325,20 +361,19 @@ namespace ComicConverterSetup
         {
             foreach (var all in new[] { true, false })
             {
-                try
+                foreach (var view in Views)          // 旧版本写在 32 位视图里，一并清干净
                 {
-                    var hive = all ? RegistryHive.LocalMachine : RegistryHive.CurrentUser;
-                    var view = (all && Environment.Is64BitOperatingSystem)
-                        ? RegistryView.Registry64
-                        : RegistryView.Default;
-
-                    using (var root = RegistryKey.OpenBaseKey(hive, view))
+                    try
                     {
-                        if (root.OpenSubKey(UninstallSubKey) != null)
-                            root.DeleteSubKeyTree(UninstallSubKey, false);
+                        var hive = all ? RegistryHive.LocalMachine : RegistryHive.CurrentUser;
+                        using (var root = RegistryKey.OpenBaseKey(hive, view))
+                        {
+                            if (root.OpenSubKey(UninstallSubKey) != null)
+                                root.DeleteSubKeyTree(UninstallSubKey, false);
+                        }
                     }
+                    catch { }
                 }
-                catch { }
             }
         }
 
@@ -360,6 +395,56 @@ namespace ComicConverterSetup
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern bool SetProcessDPIAware();
 
+        /// <summary>
+        /// 未捕获异常的兜底：写 %TEMP% 日志 + 自绘错误框（带「打开日志」）。
+        /// UI 线程异常走 Application.ThreadException，其余走 AppDomain.UnhandledException。
+        /// 后者跟着崩溃线程走 —— 若不在 UI 线程，先切回去再建窗，WinForms 控件
+        /// 在 MTA 工作线程上 ShowDialog 不可靠。
+        /// </summary>
+        static void Fatal(Exception ex)
+        {
+            string log = null;
+            try
+            {
+                log = Path.Combine(Path.GetTempPath(), AppId + "-setup-error.log");
+                File.AppendAllText(log,
+                    "---- " + DateTime.Now + "  v" + Version + Environment.NewLine
+                    + (ex == null ? "(未知异常)" : ex.ToString())
+                    + Environment.NewLine + Environment.NewLine);
+            }
+            catch { }
+
+            // 有向导开着就挂在它上面（居中在向导，别居中到屏幕）；没有就屏幕居中
+            Form owner = null;
+            try { if (Application.OpenForms.Count > 0) owner = Application.OpenForms[0]; } catch { }
+
+            if (owner != null && owner.InvokeRequired)
+            {
+                try
+                {
+                    owner.BeginInvoke(new Action(delegate { ShowFatal(owner, log); }));
+                    return;
+                }
+                catch { }    // 窗口正在关闭等竞态：退回直接弹
+            }
+            ShowFatal(owner, log);
+        }
+
+        static void ShowFatal(IWin32Window owner, string log)
+        {
+            try
+            {
+                MsgDialog.Error(owner,
+                    log == null
+                        ? "安装程序遇到没有预料到的问题，可能无法继续。\n\n"
+                          + "详细信息未能写入日志文件，请把上述情况反馈给作者。"
+                        : "安装程序遇到没有预料到的问题，可能无法继续。\n\n"
+                          + "详细信息已写入日志文件，可以点「打开日志」查看。",
+                    log);
+            }
+            catch { }
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -368,6 +453,16 @@ namespace ComicConverterSetup
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            // 全局兜底：没被页面接住的异常也要给用户一个能看的地方，不能界面啥也没变就没了
+            Application.ThreadException += delegate(object s, System.Threading.ThreadExceptionEventArgs e)
+            {
+                Fatal(e.Exception);
+            };
+            AppDomain.CurrentDomain.UnhandledException += delegate(object s, UnhandledExceptionEventArgs e)
+            {
+                Fatal(e.ExceptionObject as Exception);
+            };
 
             // 卸载：先复制到临时目录，再从临时目录执行，才能真正删掉安装目录
             int runIdx = Array.IndexOf(args, "--uninstall-run");
@@ -389,6 +484,16 @@ namespace ComicConverterSetup
 
             // 提权重启后的实例：安装范围已经确定
             if (Array.IndexOf(args, "--all-users") >= 0) Mode = InstallMode.AllUsers;
+
+            // 提权重启后接着走（--resume=N）：用户刚选完模式，不该再从欢迎页点一遍
+            foreach (var a in args)
+            {
+                if (a.StartsWith("--resume=", StringComparison.Ordinal))
+                {
+                    int page;
+                    if (int.TryParse(a.Substring("--resume=".Length), out page)) ResumePage = page;
+                }
+            }
 
             if (args.Length > 0 && args[0] == "--silent")
             {
@@ -444,8 +549,11 @@ namespace ComicConverterSetup
             }
             catch (Exception ex)
             {
-                MessageBox.Show("无法启动卸载程序：\n" + ex.Message, AppName,
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // 自绘对话框 + owner 取当前打开的第一个窗体（卸载向导），居中在它上面；
+                // 用系统消息框会是系统主题观感，还会因为出错图标响一声（规范 §二.1）
+                var owner = Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null;
+                MsgDialog.Info(owner, "无法启动卸载程序：\n" + ex.Message
+                    + "\n\n可以手动到安装目录里运行 uninstall.exe。");
             }
         }
 
@@ -455,6 +563,12 @@ namespace ComicConverterSetup
                                      bool startMenuShortcut, bool resetConfig,
                                      Action<int, string> progress)
         {
+            // 执行函数开头复查占用（规范 §三.1-7，与卸载侧 RemoveAll 同款）：
+            // 预检到执行之间又启动的进程不杀，抛出去由向导 catch 里的 RunningInstances
+            // 复查兜住，切「正在运行」页。--silent 场景抛异常 → exit(1)，与解压失败同路。
+            if (RunningInstances(dir).Length > 0)
+                throw new StillRunningException();
+
             Directory.CreateDirectory(dir);
 
             var asm = Assembly.GetExecutingAssembly();
@@ -491,13 +605,13 @@ namespace ComicConverterSetup
             {
                 try
                 {
-                    var cfg = ConfigPathIn(dir);
+                    var cfg = SettingsPathIn(dir);
                     if (File.Exists(cfg)) File.Delete(cfg);
                 }
                 catch { }
             }
 
-            // 使用说明随程序一起装进去，完成页可以勾选查看
+            // 使用说明随程序一起装进去（用户可自己在安装目录打开；完成页不再放对应复选框）
             try
             {
                 File.WriteAllText(ReadmePathIn(dir), Readme, new UTF8Encoding(false));
@@ -547,10 +661,17 @@ namespace ComicConverterSetup
         }
 
         // ------------------------------------------------------------ 卸载
+        /// <summary>卸载开始时发现目标程序又在运行 —— 向导据此切回占用页，而不是当失败处理。</summary>
+        public class StillRunningException : Exception { }
+
         /// <summary>清理安装痕迹，返回删除的文件数。keepConfig 为 true 时保留 config.json。</summary>
         public static int RemoveAll(string dir, bool keepConfig, Action<int, string> progress)
         {
-            KillRunning(dir);
+            // 占用进程不在这里杀：页面层已经按规范「先问再杀」（确认页检测 → 占用页由用户决定），
+            // 走到这里还活着，只能是检查之后到动手之前这段时间新启动的 —— 静默杀等于无提示地
+            // 关掉用户没同意关的东西（安装侧 DoInstall 同样只做预检不杀）。抛出去让向导切占用页。
+            if (RunningInstances(dir).Length > 0)
+                throw new StillRunningException();
 
             const int Steps = 4;
             int step = 0;
@@ -612,6 +733,53 @@ namespace ComicConverterSetup
             tick("清理缓存");
 
             return removed;
+        }
+
+        /// <summary>
+        /// 卸载后复查：安装目录里还剩多少文件（keepConfig 时不算保留下来的配置）。
+        /// 逐文件 TryDelete 会吞掉占用/权限导致的失败，不能凭它报「已移除」——
+        /// 完成页必须先核实目录（规范 §五 3b）。
+        /// </summary>
+        public static int RemainingFiles(string dir, bool keepConfig)
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) return 0;
+                int n = 0;
+                foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+                {
+                    if (keepConfig &&
+                        Path.GetFileName(f).Equals(SettingsName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    // 卸载器自己的 exe 不算残留：可能正被父进程占用，
+                    // 由 Program.ScheduleSelfDelete 在进程退出后删。
+                    if (Path.GetFileName(f).Equals("uninstall.exe", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    n++;
+                }
+                return n;
+            }
+            catch { return 1; }   // 读不了也算「有残留」，宁可不报成功
+        }
+
+        /// <summary>卸载勾了保留后仍在的用户配置清单，用于完成页说明。</summary>
+        public static string KeptConfigFiles(string dir)
+        {
+            try
+            {
+                return File.Exists(SettingsPathIn(dir)) ? SettingsName : "（未发现个人数据）";
+            }
+            catch { return "（无法读取）"; }
+        }
+
+        /// <summary>保留的配置文件的完整地址（完成页单独一行，过长用省略号）。</summary>
+        public static string KeptConfigPaths(string dir)
+        {
+            try
+            {
+                return File.Exists(SettingsPathIn(dir)) ? SettingsPathIn(dir) : "";
+            }
+            catch { return ""; }
         }
 
         static bool TryDelete(string path)
@@ -708,15 +876,8 @@ namespace ComicConverterSetup
             try { Process.Start(ExePathIn(dir)); } catch { }
         }
 
-        public static void OpenReadme(string dir)
-        {
-            try
-            {
-                var p = ReadmePathIn(dir);
-                if (File.Exists(p)) Process.Start(new ProcessStartInfo(p) { UseShellExecute = true });
-            }
-            catch { }
-        }
+        // 说明文件仍随程序写进安装目录（用户随时可自己打开）；
+        // 但完成页不再放「查看使用说明」复选框 —— 规范 §三 完成页：只放「立即运行」一个。
 
         // ------------------------------------------------------------ 内嵌文本
         static string _license;

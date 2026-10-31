@@ -152,6 +152,14 @@ def dismiss_dialog():
     return True
 
 
+def artifacts_setup(root):
+    """安装包在 artifacts/ 下且文件名带版本号（规范 §一）。版本从 version.props 读，别写死。"""
+    import re
+    with open(os.path.join(root, "src", "version.props"), encoding="utf-8") as f:
+        v = re.search(r"<Version>([^<]+)</Version>", f.read()).group(1)
+    return os.path.join(root, "artifacts", "ComicConverter-%s-setup.exe" % v)
+
+
 def main():
     exe, outdir, tag = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(outdir, exist_ok=True)

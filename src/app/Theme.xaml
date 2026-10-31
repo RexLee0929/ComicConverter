@@ -23,6 +23,10 @@
     <SolidColorBrush x:Key="AccentSoftBrush"  Color="#E6F2EE"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#0B5A46"/>
     <SolidColorBrush x:Key="AccentDarkBrush"  Color="#0B5A46"/>
+    <!-- 语义色：不参与派生，固定值（规范 §七.2 唯一的例外）。
+         错误红 #C42B1C = Windows 自己的错误色，用在错误框图标与状态栏「出错」上。
+         危险操作的主按钮在页面侧（内联确认条，见 Web/index.html 的 err 变量），不在 WPF 里。 -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C"/>
 
     <!-- ============================================================ 菜单栏 -->
 
@@ -34,7 +38,12 @@
         <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
     </Style>
 
-    <Style x:Key="MenuSepStyle" TargetType="Separator">
+    <!-- 分隔线：1px #E1E1E1、外边距 10,5（组间距 5+1+5 = 11px，规范 §五.1）。
+         必须挂在 MenuItem.SeparatorStyleKey 键下：MenuItem 生成子项容器时会给
+         Separator 显式套这个键的样式，显式样式优先级高于隐式类型样式——
+         写成隐式 TargetType="Separator" 会被整个顶掉，退回系统默认模板
+         （1px #DEDEDE、左缩进 32 / 右 6，满宽横穿）。实测踩过。 -->
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Separator">

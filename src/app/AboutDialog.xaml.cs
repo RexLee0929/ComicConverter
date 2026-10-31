@@ -56,9 +56,17 @@ namespace ComicConverter
                 FindBrush("AccentBrush"), FindBrush("InkBrush"),
                 FindBrush("MutedBrush"), FindBrush("DimBrush"));
 
-            // 赋值后必须再压一次：RichTextBox 会把 PagePadding 恢复成默认的 5,0,5,0，
-            // 正文整体右移 5px，和 txtFormat 的左边界对不齐（实测踩过）。
-            Doc.Document.PagePadding = new Thickness(0);
+            // RichTextBox 会在文档挂上去之后的布局里把 PagePadding 复位成模板值 5,0,5,0，
+            // 正文于是整体右移 5px、和卡片的左内边距对不齐。光在赋值后设一次不管用
+            // （赋值时文档还没上屏），必须在 Loaded 之后补压一次，之后每次自适应高度也顺手压一次。
+            Doc.Loaded += delegate { ZeroPadding(); };
+            ZeroPadding();
+        }
+
+        /// <summary>把富文本的页内边距压成 0，缩进全部由卡片内边距和段落缩进决定。</summary>
+        void ZeroPadding()
+        {
+            if (Doc.Document != null) Doc.Document.PagePadding = new Thickness(0);
         }
 
         static string _aboutMd;
@@ -125,6 +133,8 @@ namespace ComicConverter
         /// </summary>
         void FitToContent()
         {
+            ZeroPadding();      // 布局过程会把它复位，每轮都补一次
+
             double delta = Doc.ExtentHeight - Doc.ViewportHeight;
             if (Math.Abs(delta) > 0.5)
                 Height = Math.Ceiling(ActualHeight + delta);
@@ -132,6 +142,12 @@ namespace ComicConverter
             // 再校一遍：第一遍调整后布局会有一次回落，Background 优先级跑完才算稳定
             if (++_fitPasses < 3)
                 Dispatcher.BeginInvoke(new Action(FitToContent), DispatcherPriority.Background);
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            WindowChrome.Apply(this);   // 关于框也是主窗口的一层，标题栏必须同色（§七.2）
         }
 
         protected override void OnContentRendered(EventArgs e)

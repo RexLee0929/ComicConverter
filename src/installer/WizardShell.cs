@@ -244,9 +244,9 @@ namespace ComicConverterSetup
             });
 
             // ---- 底部按钮（先建，再统一交给 LayoutButtons 定位）
-            CancelBtn = MakeButton("取消", 0, 0, 86, 28);
-            NextBtn = MakeButton("下一步", 0, 0, 86, 28);
-            Back = MakeButton("上一步", 0, 0, 86, 28);
+            CancelBtn = MakeButton("取消", 0, 0, 86, 28, false);
+            NextBtn = MakeButton("下一步", 0, 0, 86, 28, true);
+            Back = MakeButton("上一步", 0, 0, 86, 28, false);
             content.Controls.Add(Back);
             content.Controls.Add(NextBtn);
             content.Controls.Add(CancelBtn);
@@ -277,17 +277,39 @@ namespace ComicConverterSetup
             Back.Location = P(rightEdge - bw - gap - nextWidth - gap - bw, by);
         }
 
-        Button MakeButton(string text, int x, int y, int w, int h)
+        /// <summary>
+        /// 自绘 flat 按钮：白底 + 1px 描边 + hover/pressed 自控，和 MsgDialog 的按钮同一套
+        /// （主按钮 Accent 描边，次按钮 Line 描边）。之前用 FlatStyle.System，
+        /// 系统主题渲染的白底直角和弹窗按钮不是一种质感。
+        /// </summary>
+        Button MakeButton(string text, int x, int y, int w, int h, bool primary)
         {
             var b = new Button
             {
                 Text = text,
                 Location = P(x, y),
                 Size = Z(w, h),
-                FlatStyle = FlatStyle.System,
-                Font = _uiFont
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.White,
+                ForeColor = primary ? Theme.Ink : Theme.Muted,
+                Font = _uiFont,
+                UseVisualStyleBackColor = false
             };
+            b.FlatAppearance.BorderSize = 1;
+            b.FlatAppearance.MouseOverBackColor = Theme.HoverBg;
+            b.FlatAppearance.MouseDownBackColor = Theme.SelectBg;
+            // 自绘按钮不会自动画禁用态：置灰逻辑自己接住，否则「下一步」被禁用时
+            // 还是绿描边黑字，看着照样能点（系统样式原本会自动变灰）。
+            b.EnabledChanged += delegate { ApplyButtonState(b, primary); };
+            ApplyButtonState(b, primary);
             return b;
+        }
+
+        static void ApplyButtonState(Button b, bool primary)
+        {
+            bool on = b.Enabled;
+            b.ForeColor = on ? (primary ? Theme.Ink : Theme.Muted) : Theme.Dim;
+            b.FlatAppearance.BorderColor = on && primary ? Theme.Accent : Theme.Line;
         }
 
         // ------------------------------------------------------------ 页面构件
@@ -335,9 +357,114 @@ namespace ComicConverterSetup
             return c;
         }
 
+        // ------------------------------------------------------------ 两列与逐行累加
+        /// <summary>
+        /// 「标签 + 值」两列一行：标签右对齐成一列，值左对齐并自动折行。
+        /// 返回这一行实际占用的高度（设计像素），调用方累加 y 即可。
+        /// 标签用中性灰（#5C5C5C）而不是浅灰 —— 一整屏浅灰标签基本读不出来。
+        /// </summary>
+        protected int Row(string label, string value, int y)
+        {
+            return Row(label, value, y, Theme.Ink);
+        }
+
+        protected int Row(string label, string value, int y, Color valueColor)
+        {
+            const int LabelW = 88, Gap = 8;
+            const int ValueW = 428 - LabelW - Gap;
+
+            var lb = new Label
+            {
+                Text = label,
+                Location = P(0, y),
+                Size = Z(LabelW, 20),
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = Theme.Muted,
+                BackColor = Color.White
+            };
+            Body.Controls.Add(lb);
+
+            int h = MeasureH(value, ValueW);
+            var vb = new Label
+            {
+                Text = value,
+                Location = P(LabelW + Gap, y),
+                Size = Z(ValueW, h),
+                ForeColor = valueColor,
+                BackColor = Color.White
+            };
+            Body.Controls.Add(vb);
+            return h;
+        }
+
+        /// <summary>
+        /// 按设计宽度实测折行后的高度（设计像素）。Label 的 AutoSize 默认 false，
+        /// 高度算不准就会把长路径的第二行裁掉。
+        /// </summary>
+        protected int MeasureH(string text, int designWidth)
+        {
+            return MeasureH(text, designWidth, Body.Font);
+        }
+
+        protected int MeasureH(string text, int designWidth, Font f)
+        {
+            if (string.IsNullOrEmpty(text)) return 20;
+            int devH = TextRenderer.MeasureText(text, f,
+                new Size(S(designWidth), 0), TextFormatFlags.WordBreak).Height;
+            int h = (int)Math.Ceiling(devH / K);
+            return h < 20 ? 20 : h + 2;      // +2：中文字体实测会吃掉半行行距
+        }
+
+        /// <summary>
+        /// 完成页/说明区逐行累加：返回下一行的 y。**空文本不占位** —— 用固定 y 排版时，
+        /// 没有的那一行会留下一个空洞，看着像漏了内容（规范 §五-3）。
+        /// </summary>
+        protected int Line(string text, int y, int w)
+        {
+            if (string.IsNullOrEmpty(text)) return y;
+            int h = MeasureH(text, w);
+            L(text, 0, y, w, h);
+            return y + h + 4;
+        }
+
+        /// <summary>同上，但按路径处理：固定单行 + 省略号截断 + 悬停看全（规范 §五-3）。</summary>
+        protected int LinePath(string text, int y)
+        {
+            if (string.IsNullOrEmpty(text)) return y;
+            var lbl = L(text, 0, y, 428, 20);
+            lbl.AutoEllipsis = true;
+            var tip = new ToolTip();
+            tip.SetToolTip(lbl, text);
+            return y + 24;
+        }
+
+        /// <summary>
+        /// 完成页的结论行：9.5pt 加粗，让「装好了」一眼看到（规范 §三 完成页）。
+        /// 返回下一行的 y。
+        /// </summary>
+        protected int Head(string text, int y, int w)
+        {
+            if (string.IsNullOrEmpty(text)) return y;
+            var f = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold);
+            int h = MeasureH(text, w, f);
+            var lbl = new Label
+            {
+                Text = text,
+                Location = P(0, y),
+                Size = Z(w, h),
+                ForeColor = Ink,
+                BackColor = Color.White,
+                Font = f,
+                AutoSize = false
+            };
+            Body.Controls.Add(lbl);
+            return y + h + 6;
+        }
+
+
         protected Button SmallButton(string text, int x, int y, int w, int h)
         {
-            var b = MakeButton(text, x, y, w, h);
+            var b = MakeButton(text, x, y, w, h, false);   // 页内小按钮（浏览…）都是次按钮样式
             Body.Controls.Add(b);
             return b;
         }

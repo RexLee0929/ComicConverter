@@ -13,8 +13,9 @@ ComicConverter 同步工具：当前工作区（编辑区） -> D:\\Code\\ComicC
 
 安全策略:
   1. 不做 --apply 时只打印计划，绝不落盘。
-  2. 每个写入的文件先备份到 <目标>/.sync-backup/<时间戳>/ 下，再覆盖。
+  2. 只写白名单里的源码/文档，构建产物和 `_` 开头的临时文件一律不同步。
   3. 若目标文件在上次同步之后被外部改动过（哈希对不上），默认报冲突并跳过，不覆盖。
+     发布区是 git 仓库，要回滚历史版本直接 `git checkout`，不再另存备份。
   4. 默认不删除任何目标文件，除非显式 --prune。
 """
 
@@ -43,7 +44,7 @@ SOURCE_FILES = ["README.md", "CHANGELOG.md", "DEVELOPMENT.md", "LICENSE", ".giti
 SOURCE_DIRS = ["src", "tools", "releases"]
 
 # 判断「是不是同一批代码」时忽略的路径片段
-SKIP_PARTS = {"bin", "obj", ".git", ".vs", ".sync-backup", ".sync-state.json",
+SKIP_PARTS = {"bin", "obj", ".git", ".vs", ".sync-state.json",
               "_shots", "_shots2"}
 
 # 编译产物所在位置（相对编辑区根）
@@ -147,7 +148,7 @@ def main() -> int:
         if not (SRC_ROOT / BUILD_MAIN).is_dir():
             print("! 未找到编译产物目录，--with-build 实际没带上二进制")
 
-    add, same, conflict, backup_dir = [], [], [], None
+    add, same, conflict = [], [], []
     stamp = time.strftime("%Y%m%d-%H%M%S")
     new_state = {}
 
@@ -217,24 +218,15 @@ def main() -> int:
         print("无需写入。")
         return 0
 
-    backup_dir = SRC_ROOT / "tools" / ".sync-backup" / stamp
     written = 0
     for src, rel, tag in add:
         dst = dest / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.is_file():
-            b = backup_dir / rel
-            b.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(dst, b)
         shutil.copy2(src, dst)
         written += 1
 
     for r in removed:
-        dst = dest / r
-        b = backup_dir / r
-        b.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(dst, b)
-        dst.unlink()
+        (dest / r).unlink()
 
     # 写完再落状态，避免中途失败把状态写脏
     merged = dict(known)
@@ -251,8 +243,6 @@ def main() -> int:
     print(f"完成：写入 {written}，删除 {len(removed)}。")
     if conflict:
         print(f"× 仍有 {len(conflict)} 个冲突未覆盖（状态已保留原基准），确认覆盖请加 --force")
-    if backup_dir and backup_dir.is_dir():
-        print(f"覆盖前的旧文件备份在: {backup_dir}")
     # 有冲突就不能返回 0：否则外层（build.py / 发布脚本）会当成一切正常，
     # 把旧文件当新版本推上去。
     return 1 if conflict else 0

@@ -214,7 +214,7 @@ namespace ComicConverterSetup
                 g.DrawString(_title, f, br, textX, S(9));
 
             using (var f = new Font("Microsoft YaHei UI", 8.5f))
-            using (var br = new SolidBrush(Color.FromArgb(110, 110, 110)))
+            using (var br = new SolidBrush(Theme.Dim))   // 中性色只认调色板：#828282，不是随手一个 #6E6E6E
                 g.DrawString(_sub, f, br, textX, S(32));
         }
 
@@ -274,7 +274,7 @@ namespace ComicConverterSetup
                 g.FillRectangle(b2, right);
             g.Clip = old;
 
-            using (var pen = new Pen(Color.FromArgb(150, 150, 150), Math.Max(1f, S(1))))
+            using (var pen = new Pen(Theme.Dim, Math.Max(1f, S(1))))    // 中性色表里的 Dim #828282，不私调灰
                 g.DrawPath(pen, shield);
             shield.Dispose();
         }

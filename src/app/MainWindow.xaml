@@ -7,8 +7,8 @@
         MinHeight="700" MinWidth="1120"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
-        Background="#F3F3F3"
-        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI">
+        Background="{StaticResource WindowBrush}"
+        FontFamily="Microsoft YaHei UI">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -33,11 +33,12 @@
                            RenderOptions.BitmapScalingMode="HighQuality"
                            HorizontalAlignment="Center" Margin="0,0,0,16"/>
                     <TextBlock Text="ComicConverter" FontSize="17" FontWeight="SemiBold"
-                               Foreground="#2C2C2A" HorizontalAlignment="Center"/>
+                               Foreground="{StaticResource InkBrush}" HorizontalAlignment="Center"/>
                     <TextBlock x:Name="TxtVersion" Text="" FontSize="11.5" FontWeight="SemiBold"
                                Foreground="{DynamicResource AccentBrush}"
                                HorizontalAlignment="Center" Margin="0,3,0,0"/>
-                    <TextBlock x:Name="TxtSplash" Text="正在启动…" FontSize="12.5" Foreground="#8A887F"
+                    <TextBlock x:Name="TxtSplash" Text="正在启动…" FontSize="12.5"
+                               Foreground="{StaticResource DimBrush}"
                                HorizontalAlignment="Center" Margin="0,10,0,0"
                                TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
                 </StackPanel>
@@ -47,7 +48,8 @@
         <!-- 状态栏：只承载「随操作变化」的运行时状态。
              规则见《程序本体设计规范》：程序名/版本/作者/邮箱一律不进状态栏，
              它们统一放在「帮助 → 关于」。 -->
-        <Border Grid.Row="2" Background="#F0F0F0" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" Background="{StaticResource WindowBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
             <Grid Height="26" Margin="12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -57,24 +59,26 @@
 
                 <!-- 左：任务阶段 + 完成进度 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="StPhase" Text="待命" FontSize="11.5" Foreground="#1B1B1B"/>
-                    <TextBlock x:Name="StCount" Text="完成 0/0" FontSize="11.5" Foreground="#5C5C5C"
-                               Margin="12,0,0,0"/>
-                    <TextBlock x:Name="StCurrent" Text="" FontSize="11.5" Foreground="#8C8C8C"
+                    <TextBlock x:Name="StPhase" Text="待命" FontSize="11.5" Foreground="{StaticResource InkBrush}"/>
+                    <TextBlock x:Name="StCount" Text="完成 0/0" FontSize="11.5"
+                               Foreground="{StaticResource MutedBrush}" Margin="12,0,0,0"/>
+                    <TextBlock x:Name="StCurrent" Text="" FontSize="11.5" Foreground="{StaticResource DimBrush}"
                                Margin="12,0,0,0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
 
-                <!-- 中：留白（将来放「保存中」一类瞬时提示） -->
-                <TextBlock Grid.Column="1" x:Name="StSaved" Text="" FontSize="11.5" Foreground="#8C8C8C"
-                           Margin="14,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                <!-- 中：「已保存 / 已复制 / 出错」这类 1.8 秒自消的瞬时提示（规范 §六） -->
+                <TextBlock Grid.Column="1" x:Name="StSaved" Text="" FontSize="11.5"
+                           Foreground="{StaticResource DimBrush}"
+                           Margin="14,0" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
 
                 <!-- 右：当前生效的运行参数 -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="StTarget" Text="目标 双兼容" FontSize="11.5" Foreground="#5C5C5C"/>
-                    <TextBlock x:Name="StReading" Text="方向 自动" FontSize="11.5" Foreground="#5C5C5C"
-                               Margin="12,0,0,0"/>
-                    <TextBlock x:Name="StJobs" Text="并发 6" FontSize="11.5" Foreground="#5C5C5C"
-                               Margin="12,0,0,0"/>
+                    <TextBlock x:Name="StTarget" Text="目标 双兼容" FontSize="11.5" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock x:Name="StReading" Text="方向 自动" FontSize="11.5"
+                               Foreground="{StaticResource MutedBrush}" Margin="12,0,0,0"/>
+                    <TextBlock x:Name="StJobs" Text="并发 6" FontSize="11.5"
+                               Foreground="{StaticResource MutedBrush}" Margin="12,0,0,0"/>
                 </StackPanel>
             </Grid>
         </Border>

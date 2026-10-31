@@ -15,8 +15,7 @@ dist/
 # 安装器负载（构建时由主程序产物生成）
 payload.zip
 
-# 同步工具的本地产物
-tools/.sync-backup/
+# 同步工具的本地产物（同步状态，用于判断目标是否被外部改过）
 tools/.sync-state.json
 
 # 运行时生成

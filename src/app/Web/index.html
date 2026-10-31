@@ -5,11 +5,11 @@
 <style>
 :root{--bg:#F3F3F3;--card:#FFFFFF;--line:#E8E8E8;--line2:#F3F3F3;--ink:#1B1B1B;
 --muted:#5C5C5C;--dim:#8C8C8C;--accent:#0F6E56;--soft:#E6F2EE;
---warn:#8A5300;--warnbg:#FFF4CE;--err:#C42B1C}
+--warn:#9D5D00;--warnbg:#FFF4CE;--err:#C42B1C}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;overflow:hidden;background:var(--bg);color:var(--ink);font-size:13px;line-height:1.5;
-font-family:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+font-family:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif;
 -webkit-font-smoothing:antialiased;user-select:none}
 
 /* 三栏铺满，页面本身永不滚动 */
@@ -94,6 +94,18 @@ color:var(--warn);font-weight:600}
 background:#1B1B1B;color:#fff;font-size:12.5px;padding:6px 15px;border-radius:16px;
 opacity:0;pointer-events:none;transition:.18s;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 #toast.on{opacity:.94;transform:translate(-50%,0)}
+
+/* 内联确认条：清缓存 / 恢复默认这类不可逆操作就地确认，不另开窗口（规范 §七 级③）。
+   白卡 + 1px 细边 + 圆角 8，主按钮用语义红（危险操作），Esc 等同「取消」。 */
+#confirm{position:fixed;left:50%;bottom:20px;transform:translate(-50%,16px);z-index:100;
+display:none;align-items:center;gap:12px;max-width:min(620px,calc(100vw - 40px));
+background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+box-shadow:0 8px 24px rgba(0,0,0,.14);opacity:0;transition:.16s}
+#confirm.on{display:flex;opacity:1;transform:translate(-50%,0)}
+#confirm .msg{font-size:12px;color:var(--muted);line-height:1.45}
+#confirm button{min-height:28px}
+#confirm button.danger{background:var(--err);border-color:var(--err);color:#fff;font-weight:600}
+#confirm button.danger:hover{background:#A11F12;border-color:#A11F12}
 </style></head><body>
 
 <main>
@@ -238,6 +250,12 @@ opacity:0;pointer-events:none;transition:.18s;box-shadow:0 4px 14px rgba(0,0,0,.
 
 <div id="toast"></div>
 
+<div id="confirm">
+  <span class="msg" id="confirmText"></span>
+  <button id="confirmNo">取消</button>
+  <button id="confirmOk" class="danger">确认</button>
+</div>
+
 <script>
 let MODE = 'convert', saveTimer, booting = true;
 const $ = id => document.getElementById(id);
@@ -277,7 +295,7 @@ async function pick(el){
   if (typeof el === 'string') el = $(el);
   const j = await (await fetch('/api/pick', {method:'POST', body:'{}'})).json();
   if (j.path && !j.path.startsWith('ERR:')) { el.value = j.path; saveCfg(); }
-  else if (j.path) alert('无法打开目录选择框，请手动输入路径。\n' + j.path);
+  else if (j.path) toast('无法打开目录选择框，请手动输入路径：' + j.path, 3200);
 }
 
 function getCfg(){
@@ -309,23 +327,27 @@ function saveCfg(){
   }, 400);
 }
 
+/* 与宿主的唯一通道：状态回传、页面发起的动作（act）都走这里 */
+function post(o){
+  try{
+    if (window.chrome && window.chrome.webview)
+      window.chrome.webview.postMessage(JSON.stringify(o));
+  }catch(e){}
+}
+
 /* 把界面上的模式/方向/目标回传给主窗口：菜单勾号与状态栏都靠这条通道同步 */
 function report(extra){
-  try{
-    if (window.chrome && window.chrome.webview){
-      const payload = Object.assign({
-        mode: MODE,
-        reading: document.querySelector('input[name=reading]:checked').value,
-        target: document.querySelector('input[name=target]:checked').value,
-        targetText: {both:'双兼容', kavita:'Kavita', komga:'Komga'}[
-          document.querySelector('input[name=target]:checked').value] || '双兼容',
-        readingText: {auto:'自动', rtl:'右开本', ltr:'左开本', ttb:'上到下'}[
-          document.querySelector('input[name=reading]:checked').value] || '自动',
-        jobs: parseInt($('jobs').value) || 6
-      }, extra || {});
-      window.chrome.webview.postMessage(JSON.stringify(payload));
-    }
-  }catch(e){}
+  const payload = Object.assign({
+    mode: MODE,
+    reading: document.querySelector('input[name=reading]:checked').value,
+    target: document.querySelector('input[name=target]:checked').value,
+    targetText: {both:'双兼容', kavita:'Kavita', komga:'Komga'}[
+      document.querySelector('input[name=target]:checked').value] || '双兼容',
+    readingText: {auto:'自动', rtl:'右开本', ltr:'左开本', ttb:'上到下'}[
+      document.querySelector('input[name=reading]:checked').value] || '自动',
+    jobs: parseInt($('jobs').value) || 6
+  }, extra || {});
+  post(payload);
 }
 
 function setTargetHint(){
@@ -377,7 +399,7 @@ async function loadCfg(){
 
 async function doPreview(){
   const cfg = getCfg();
-  if (!cfg.sources.length) return alert('请先添加源目录');
+  if (!cfg.sources.length){ toast('请先添加源目录'); return; }
   $('prevBox').innerHTML = '<div class="empty">扫描中…</div>';
   const j = await (await fetch('/api/preview', {method:'POST',
     headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)})).json();
@@ -400,12 +422,12 @@ async function doPreview(){
 
 async function doStart(){
   const cfg = getCfg();
-  if (!cfg.sources.length) return alert('请先添加源目录');
-  if (!cfg.out) return alert('请填写输出目录');
+  if (!cfg.sources.length){ toast('请先添加源目录'); return; }
+  if (!cfg.out){ toast('请填写输出目录'); return; }
   $('btnStart').disabled = true; $('btnStop').disabled = false;
   const j = await (await fetch('/api/start', {method:'POST',
     headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)})).json();
-  if (j.err){ alert(j.err); $('btnStart').disabled = false; }
+  if (j.err){ toast(j.err, 3200); $('btnStart').disabled = false; }
 }
 
 async function doStop(){ await fetch('/api/stop', {method:'POST', body:'{}'}); }
@@ -447,18 +469,76 @@ $('useLimit').addEventListener('change', e => {
 document.querySelectorAll('#out,#tpl,#jobs,#limit').forEach(el =>
   el.addEventListener('input', saveCfg));
 
-function toast(msg){
+/* 页面内提示条：不用原生 alert —— 浏览器弹窗是系统样式，和卡片界面不是一个东西 */
+function toast(msg, ms){
   const t = $('toast');
   t.textContent = msg;
   t.classList.add('on');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('on'), 1600);
+  toast._t = setTimeout(() => t.classList.remove('on'), ms || 1600);
 }
+
+/* ---------------------------------------------------------------- 内联确认条
+   不可逆操作（清缓存、恢复默认设置）在页面底部就地确认：按钮就地表明后果，
+   点了就做，不再"点确定后又弹一个已清除"。文案与动作都留在页面里，
+   宿主只按 id 执行（见 MainWindow.OnWebMessage 的 act 分支）。 */
+const CONFIRMS = {
+  'clear-cache': { text:'清除阅读方向缓存后，下次判断阅读方向需要重新联网查证。', ok:'确认清除' },
+  'reset-config': { text:'将把界面设置恢复为默认值（源目录、输出目录不受影响），并立即生效。', ok:'恢复默认' }
+};
+let confirmId = null;
+
+function confirmBar(id){
+  const c = CONFIRMS[id];
+  if (!c) return;
+  closeConfirm();
+  confirmId = id;
+  $('confirmText').textContent = c.text;
+  $('confirmOk').textContent = c.ok;
+  $('confirm').classList.add('on');
+  $('confirmNo').focus();          // 危险操作：焦点先落在「取消」上
+}
+
+function closeConfirm(){
+  confirmId = null;
+  $('confirm').classList.remove('on');
+}
+
+$('confirmNo').addEventListener('click', closeConfirm);
+$('confirmOk').addEventListener('click', () => {
+  const id = confirmId;
+  closeConfirm();
+  if (id) post({ act: id });
+});
+
+/* ---------------------------------------------------------------- 快捷键
+   菜单右侧的快捷键由页面执行：键盘焦点几乎总在 WebView 里，
+   宿主窗口的 PreviewKeyDown 收不到这些键。与菜单命令走同一条路。 */
+document.addEventListener('keydown', e => {
+  if (e.altKey) return;
+  const k = (e.key || '').toLowerCase();
+
+  if (e.ctrlKey){
+    if (e.shiftKey && k === 'o'){ e.preventDefault(); pick('out'); return; }
+    if (e.shiftKey && k === 'l'){ e.preventDefault(); UI.clearPreview(); return; }
+    if (!e.shiftKey && k === 'o'){ e.preventDefault(); addSrc(''); return; }
+    if (!e.shiftKey && k === 'l'){ e.preventDefault(); UI.clearLog(); return; }
+    if (!e.shiftKey && k === 'e'){ e.preventDefault(); post({ act: 'open-out' }); return; }
+    return;
+  }
+
+  if (k === 'f5'){ e.preventDefault(); UI.reload(); toast('界面已刷新'); }
+  else if (k === 'escape') closeConfirm();
+});
 
 /* 菜单栏由主窗口调用，页面只暴露动作 */
 window.UI = {
   addSource(){ addSrc(''); },
   pickOut(){ pick('out'); },
+  /* 菜单栏的「预演 / 开始 / 停止」与按钮走同一条路 */
+  preview(){ doPreview(); },
+  start(){ doStart(); },
+  stop(){ doStop(); },
   setMode(m){ setMode(m); },
   setReading(v){
     const e = document.querySelector('input[name=reading][value="' + v + '"]');
@@ -475,7 +555,9 @@ window.UI = {
   },
   reload(){ booting = true; loadCfg(); },
   report(){ report(); },
-  toast(m){ toast(m); }
+  toast(m){ toast(m); },
+  /* 宿主菜单里的「清除缓存 / 恢复默认」只负责调起内联确认条 */
+  confirm(id){ confirmBar(id); }
 };
 
 loadCfg().then(() => { report(); });
