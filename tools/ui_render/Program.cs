@@ -23,7 +23,7 @@ namespace ComicRenderer
         [STAThread]
         static int Main(string[] args)
         {
-            string outDir = args.Length > 0 ? args[0] : ".";
+            string outDir = args.Length > 0 ? args[0] : DefaultOutDir();
             Directory.CreateDirectory(outDir);
 
             var app = new Application();
@@ -34,6 +34,14 @@ namespace ComicRenderer
 
             ComicConverter.Accent.Init();
             Console.WriteLine("accent = " + ComicConverter.Accent.BrandHex);
+            try
+            {
+                CheckIconRendering();
+            }
+            catch (Exception ex)
+            {
+                Failures.Add("图标渲染自检异常：" + ex);
+            }
 
             var win = new Window
             {
@@ -102,6 +110,7 @@ namespace ComicRenderer
             about.UpdateLayout();
             Pump(300);
             Console.WriteLine("about win=" + about.Width + "x" + about.Height + " resize=" + about.ResizeMode);
+            double aboutWidth = about.Width;
             var doc = about.FindName("Doc") as RichTextBox;
             if (doc != null)
             {
@@ -120,6 +129,12 @@ namespace ComicRenderer
                 var pad = doc.Document.PagePadding;
                 if (Math.Abs(pad.Left) > 0.01 || Math.Abs(pad.Right) > 0.01 || Math.Abs(pad.Top) > 0.01)
                     Failures.Add("关于框 PagePadding 被复位成 " + pad + "（正文会右移 " + pad.Left + "px）");
+
+                // ---- 宽度出处（规范 §七.2：常量必须是「量过之后落下来的数」）----
+                // 逐段按「不换行」量自然宽，取最宽的那段 —— XAML 里 Width=640 的依据就写在下面这行输出里。
+                ReportNaturalWidth(doc);
+                Console.WriteLine("doc width = " + Math.Round(doc.ActualWidth, 1)
+                                  + "  (= 640 - 窗口 margin 20x2 - 卡片边框 1x2 - 卡片 padding 14x2)");
             }
 
             Save((FrameworkElement)about.Content, Path.Combine(outDir, "about.png"));
@@ -152,8 +167,47 @@ namespace ComicRenderer
             err.UpdateLayout();
             Pump(300);
             Console.WriteLine("err-dlg size=" + err.Width + "x" + err.Height + " title=\"" + err.Title + "\"");
+            double errWidth = err.Width;
+            var body = err.FindName("BodyText") as TextBlock;
+            if (body != null)
+                Console.WriteLine("dlg body width = " + Math.Round(body.ActualWidth, 1)
+                                  + "  (窗口 " + Math.Round(err.Width, 1) + " 里扣掉卡片与图标列之后)");
             Save((FrameworkElement)err.Content, Path.Combine(outDir, "dlg-error.png"));
             err.Close();
+
+            // 6) 宽度口径（规范 §10.4）：宽度必须运行时按内容量 —— 同一程序里不同的框宽度要不同。
+            //    拿同一个错误框、换一句更短的正文，宽度应当跟着变；两者相等就说明又写死了一个数。
+            //    顺带验「改宽之后有没有把居中带歪」：量宽发生在 OnSourceInitialized，
+            //    WPF 自己那次居中用的是改宽前的尺寸，所以对话框必须自己重摆水平位置。
+            var brief = new ComicConverter.MsgDialog(win, "输出目录不可写", "换个目录再试。", null)
+                        { ShowInTaskbar = false };
+            brief.Show();
+            double centerLeft = brief.Left;
+            brief.Left = -4000;
+            brief.Top = 0;
+            Pump(500);
+            brief.UpdateLayout();
+            Pump(200);
+
+            double wantLeft = win.Left + (win.ActualWidth - brief.Width) / 2;
+            Console.WriteLine("width: long=" + Math.Round(errWidth, 1) + " brief=" + Math.Round(brief.Width, 1)
+                              + " about=" + Math.Round(aboutWidth, 1)
+                              + " | center left=" + Math.Round(centerLeft, 1)
+                              + " want=" + Math.Round(wantLeft, 1));
+            Save((FrameworkElement)brief.Content, Path.Combine(outDir, "dlg-error-brief.png"));
+            brief.Close();
+
+            if (Math.Abs(errWidth - brief.Width) < 1)
+                Failures.Add("两个不同内容的错误框宽度相同（" + Math.Round(errWidth, 1)
+                             + "），宽度像是写死的，不是按内容量的（§10.4）");
+            foreach (double w in new[] { errWidth, brief.Width, aboutWidth })
+            {
+                if (w < 320 - 0.5 || w > 640 + 0.5)
+                    Failures.Add("对话框宽度 " + Math.Round(w, 1) + " 落在 320~640 之外（§七.2）");
+            }
+            if (Math.Abs(centerLeft - wantLeft) > 1)
+                Failures.Add("对话框改宽后没有重新居中：left=" + Math.Round(centerLeft, 1)
+                             + " want=" + Math.Round(wantLeft, 1));
 
             win.Close();
             app.Shutdown();
@@ -169,7 +223,83 @@ namespace ComicRenderer
         }
 
         /// <summary>
-        /// 菜单结构断言（规范 §十）：一级菜单 ≥ 2 栏、每栏至少一项可用、
+        /// 实际程序图标逐键离屏渲染断言（图标规范 §十一 闸 5）。
+        /// 仅检查 Get 未抛异常或返回非空控件不够：WPF 路径可能静默渲染为空白。
+        /// </summary>
+        static void CheckIconRendering()
+        {
+            ComicConverter.Icons.FailOnMissing = true;
+            int passed = 0;
+            int total = 0;
+
+            try
+            {
+                ComicConverter.Icons.Get("__icon-selftest-missing-key__", Brushes.Black, 16);
+                Failures.Add("未知图标键没有触发自检失败（FailOnMissing 未生效）");
+            }
+            catch (KeyNotFoundException)
+            {
+                // 预期：未知键不能静默缺失。
+            }
+            foreach (var key in ComicConverter.Icons.Keys)
+            {
+                total++;
+                try
+                {
+                    var element = ComicConverter.Icons.Get(key, Brushes.Black, 16) as FrameworkElement;
+                    if (element == null)
+                    {
+                        Failures.Add("图标 " + key + " 返回空控件");
+                        continue;
+                    }
+
+                    element.Measure(new Size(16, 16));
+                    element.Arrange(new Rect(0, 0, 16, 16));
+                    element.UpdateLayout();
+
+                var bitmap = new RenderTargetBitmap(64, 64, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(element);
+                var pixels = new int[64 * 64];
+                bitmap.CopyPixels(pixels, 64 * 4, 0);
+                int visible = 0;
+                int minX = 64, minY = 64, maxX = -1, maxY = -1;
+                for (int y = 0; y < 64; y++)
+                {
+                    for (int x = 0; x < 64; x++)
+                    {
+                        int alpha = (int)((uint)pixels[y * 64 + x] >> 24);
+                        if (alpha <= 8) continue;
+                        visible++;
+                        minX = Math.Min(minX, x);
+                        minY = Math.Min(minY, y);
+                        maxX = Math.Max(maxX, x);
+                        maxY = Math.Max(maxY, y);
+                    }
+                }
+
+                if (visible == 0 || maxX <= minX || maxY <= minY)
+                    Failures.Add("图标 " + key + " 渲染后没有可见墨迹（pixels=" + visible
+                                 + " bounds=" + minX + "," + minY + ".." + maxX + "," + maxY + ")");
+                else
+                {
+                    Console.WriteLine("icon " + key + ": " + visible + " pixels, bounds "
+                                      + minX + "," + minY + ".." + maxX + "," + maxY);
+                    passed++;
+                }
+                }
+                catch (Exception ex)
+                {
+                    Failures.Add("图标 " + key + " 渲染失败：" + ex.GetType().Name + " " + ex.Message);
+                }
+            }
+
+            if (total == 0)
+                Failures.Add("图标渲染自检失败：Icons 表为空");
+            Console.WriteLine("icon render = " + passed + "/" + total);
+        }
+
+        /// <summary>
+        /// 菜单结构断言（规范 §十）：一级菜单 ≥ 2 栏、每栏至少一项可用，
         /// 存在「帮助」栏且其下有 about 命令。挡的是「凑数空菜单」「删着删着把帮助删了」。
         /// </summary>
         static void CheckMenu(Menu menu)
@@ -277,6 +407,23 @@ namespace ComicRenderer
             return i > 0 ? header.Substring(0, i) : header;
         }
 
+        /// <summary>
+        /// 不给输出目录时落到 tools/_shots —— 别默认写当前目录，否则从仓库根跑一次
+        /// 就会在源码目录里散落一堆 png。
+        /// </summary>
+        static string DefaultOutDir()
+        {
+            var d = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (d != null)
+            {
+                if (Directory.Exists(Path.Combine(d.FullName, "src"))
+                    && Directory.Exists(Path.Combine(d.FullName, "tools")))
+                    return Path.Combine(d.FullName, "tools", "_shots");
+                d = d.Parent;
+            }
+            return ".";
+        }
+
         static void Pump(int ms)
         {
             var frame = new DispatcherFrame();
@@ -284,6 +431,49 @@ namespace ComicRenderer
             t.Tick += delegate { t.Stop(); frame.Continue = false; };
             t.Start();
             Dispatcher.PushFrame(frame);
+        }
+
+        /// <summary>
+        /// 量关于框内容的「不换行自然宽」，给 XAML 里 Width=640 一个可复现的出处（规范 §七.2）。
+        /// 逐段用 FormattedText 按段自身的字号/字重量一遍，取最宽的一段打印；
+        /// 同时打印正文可用宽，两者一比就知道「640 是量出来的」还是「640 是阅读行宽上限、正文在折行」。
+        /// </summary>
+        static void ReportNaturalWidth(RichTextBox rtb)
+        {
+            var flow = rtb.Document;
+            var family = rtb.FontFamily ?? new FontFamily("Microsoft YaHei UI");
+            double dpi = VisualTreeHelper.GetDpi(rtb).PixelsPerDip;
+            double maxW = 0;
+            string maxText = "";
+
+            foreach (var blk in flow.Blocks)
+            {
+                var p = blk as System.Windows.Documents.Paragraph;
+                if (p == null) continue;
+
+                double size = p.FontSize;
+                if (double.IsNaN(size) || size <= 0) size = flow.FontSize;
+                var weight = p.FontWeight;
+
+                // 按「行」量，不按段量：一个段落里可能有多条硬换行（如快捷键块），
+                // 段宽是几行拼起来的，不是 §七.2 要的「最长的一行不可断内容」。
+                string raw = new System.Windows.Documents.TextRange(p.ContentStart, p.ContentEnd).Text;
+                foreach (var line in raw.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+                {
+                    string t = line.Trim();
+                    if (t.Length == 0) continue;
+
+                    var ft = new FormattedText(t, System.Globalization.CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        new Typeface(family, FontStyles.Normal, weight, FontStretches.Normal),
+                        size, Brushes.Black, dpi);
+                    double w = ft.WidthIncludingTrailingWhitespace;
+                    if (w > maxW) { maxW = w; maxText = t; }
+                }
+            }
+
+            string head = maxText.Length <= 26 ? maxText : maxText.Substring(0, 26) + "…";
+            Console.WriteLine("natural-width max = " + Math.Round(maxW, 1) + "  [" + head + "]");
         }
 
         static void Save(FrameworkElement el, string path)

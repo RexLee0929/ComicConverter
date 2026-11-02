@@ -50,8 +50,8 @@
         <!-- 状态栏：只承载「随操作变化」的运行时状态。
              规则见《程序本体设计规范》：程序名/版本/作者/邮箱一律不进状态栏，
              它们统一放在「帮助 → 关于」。 -->
-        <Border Grid.Row="2" Background="{StaticResource WindowBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" Background="{StaticResource StatusBrush}"
+                BorderBrush="{StaticResource StatusBorderBrush}" BorderThickness="0,1,0,0">
             <Grid Height="26" Margin="12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>

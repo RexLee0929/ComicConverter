@@ -21,6 +21,10 @@ namespace ComicConverter
         /// <summary>同屏只允许一个：异常连发时不能叠出第二个框（§七.1「弹窗叠弹窗」）。</summary>
         static bool _showing;
 
+        /// <summary>宽度区间（规范 §七.2）：320 是下限，640 是正文阅读行宽上限。区间内的落点由内容算。</summary>
+        const double MinContentWidth = 320;
+        const double MaxContentWidth = 640;
+
         readonly string _logPath;
 
         public MsgDialog(Window owner, string title, string body, string logPath)
@@ -35,7 +39,7 @@ namespace ComicConverter
             Title = Brand.Name;
             TitleText.Text = string.IsNullOrEmpty(title) ? "操作没有完成" : title;
             BodyText.Text = body ?? "";
-            IconHost.Content = Icons.Get("alert", Brush("DangerBrush"), 24);
+            IconHost.Content = Icons.Get("error", Brush("DangerBrush"), 24);
 
             // 没有日志路径时只剩一个「关闭」：回车与 Esc 都落到它上面
             bool hasLog = !string.IsNullOrEmpty(logPath);
@@ -48,10 +52,56 @@ namespace ComicConverter
             }
         }
 
+        /// <summary>
+        /// 按内容量出窗口宽（规范 §10.4：宽度必须运行时量）。
+        /// 取「标题 + 正文」里最长的一行 + 卡片与图标列的固定开销 + 窗口边框，夹到 320~640。
+        /// 于是同一程序里不同错误框宽度不同、改了文案宽度跟着变 —— 不再是一个写死的 560。
+        /// 固定开销从控件自身属性读（Card 的 Margin/BorderThickness/Padding、IconHost 的 Width/Margin），
+        /// 只有窗口边框是量出来的（WindowChrome.HorizontalInset），C# 里不抄任何尺寸常量。
+        /// </summary>
+        void MeasureWidth()
+        {
+            double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+
+            var titleFace = new Typeface(TitleText.FontFamily, FontStyles.Normal,
+                                         TitleText.FontWeight, FontStretches.Normal);
+            var bodyFace = new Typeface(BodyText.FontFamily, FontStyles.Normal,
+                                        BodyText.FontWeight, FontStretches.Normal);
+
+            double natural = Math.Max(
+                WindowChrome.NaturalWidthLines(TitleText.Text, titleFace, TitleText.FontSize, dpi),
+                WindowChrome.NaturalWidthLines(BodyText.Text, bodyFace, BodyText.FontSize, dpi));
+            if (natural <= 0) return;              // 量不出来就保持初始宽
+
+            double chrome = Card.Margin.Left + Card.Margin.Right
+                          + Card.BorderThickness.Left + Card.BorderThickness.Right
+                          + Card.Padding.Left + Card.Padding.Right
+                          + IconHost.Width + IconHost.Margin.Right
+                          + WindowChrome.HorizontalInset(this);
+
+            Width = Math.Min(MaxContentWidth, Math.Max(MinContentWidth, Math.Ceiling(natural + chrome)));
+
+            // 宽度是刚刚才定下来的，WPF 自己那次居中用的是改宽之前的尺寸 —— 必须自己重摆一次，
+            // 否则框会偏在一边（竖直方向仍由上一步的启动位置决定，高度稍后由 FitToContent 定）。
+            RepositionHorizontally();
+        }
+
+        void RepositionHorizontally()
+        {
+            if (WindowStartupLocation == WindowStartupLocation.CenterOwner && Owner != null && Owner.IsVisible)
+                Left = Owner.Left + (Owner.ActualWidth - Width) / 2;
+            else
+            {
+                var wa = SystemParameters.WorkArea;
+                Left = wa.Left + (wa.Width - Width) / 2;
+            }
+        }
+
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
             WindowChrome.Apply(this);      // 标题栏跟主窗口同一套，别一大一小两种标题
+            MeasureWidth();                // 先量宽再上屏：短错误窄框、长正文宽框
         }
 
         static Brush Brush(string key)

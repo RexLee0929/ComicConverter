@@ -1,7 +1,7 @@
 <Window x:Class="ComicConverter.MsgDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ComicConverter" Width="560" Height="200" MinHeight="150"
+        Title="ComicConverter" Height="200" MinHeight="150"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="{StaticResource WindowBrush}"
@@ -11,8 +11,12 @@
     <!-- 程序自己的提示框（规范 §七.2/§七.3）：不是系统借来的框，是主窗口长出来的一层。
          原生标题栏 + 同一套 DWM 配色、白卡、1px #E1E1E1、圆角 8、左侧 24 线性图标、
          右下角最多两个按钮（次按钮在左、主按钮在右）。
-         高度不用 SizeToContent 量（WPF 对富文本类内容量偏小），由 MsgDialog.FitToContent
-         按内部滚动区的 ExtentHeight − ViewportHeight 校正 2~3 轮；正文过长只在框内滚动。 -->
+         宽高都不写死在 XAML（规范 §10.4：宽度必须运行时量）：
+           · 宽：MsgDialog.MeasureWidth() 在 OnSourceInitialized 里量「标题 + 正文」最长的一行，
+             加上卡片与图标的固定开销、窗口边框，夹在 320~640 之间 —— 短错误就是窄框，
+             长正文才撑宽，一条标题更长的错误框自然比短提示宽。
+           · 高：FitToContent 按 BodyScroll 的 ExtentHeight − ViewportHeight 校正 2 轮。
+         所以改一句错误文案，框的宽高都会跟着变，不用手工重算。 -->
     <Border x:Name="Card" Margin="18" Background="{StaticResource CardBrush}"
             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
             CornerRadius="8" Padding="20,18,20,16">

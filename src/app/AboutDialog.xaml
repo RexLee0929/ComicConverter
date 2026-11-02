@@ -2,17 +2,22 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="关于 ComicConverter"
-        Width="640" Height="300" MinHeight="240"
+        Height="300" MinHeight="240"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="{StaticResource WindowBrush}"
         FontFamily="Microsoft YaHei UI">
 
     <!-- 三段式（与 txtFormat 同构）：内容框 / 联系条 / 按钮栏。
-         宽度固定 640（与 txtFormat 相同）；高度在 ContentRendered 后按富文本
-         的真实内容高度自动校正（AboutDialog.FitToContent），内容增删不用改任何数字。
+         宽高都由内容决定，XAML 里不写宽度（规范 §10.4：宽度必须运行时量）：
+           · 宽：AboutDialog.MeasureWidth() 在 OnSourceInitialized 里按「最长的一行不可断内容」
+             量出自然宽，加上卡片外边距/边距/窗口边框（这些数从控件自身属性读，不在 C# 里抄），
+             夹在 320~640 之间 —— 640 是阅读行宽上限，正文超了就换行，不把窗口撑宽。
+           · 高：ContentRendered 后按富文本真实内容高度校正（FitToContent），3 轮收敛。
+         所以改 ABOUT.md 的文案，窗口宽度和高度都会跟着变，不用手工重算任何数字。
          不能用 SizeToContent 量高——WPF 对 RichTextBox 量出来偏小，会把后两段挤出窗口；
-         也不允许用户手动缩放（NoResize），MinHeight 只留 240 兜底。 -->
+         也不允许用户手动缩放（NoResize），MinHeight 只留 240 兜底。
+         想看当前实测值：跑一遍 tools/ui_render，输出里有 natural-width / doc width 两行。 -->
     <Grid Margin="20,14,20,14">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
@@ -21,7 +26,7 @@
         </Grid.RowDefinitions>
 
         <!-- 1) 内容框：富文本，文本可选中（txtFormat 用 QTextBrowser，这里用只读 RichTextBox 等价替代） -->
-        <Border Grid.Row="0" Background="{StaticResource CardBrush}"
+        <Border x:Name="DocCard" Grid.Row="0" Background="{StaticResource CardBrush}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                 CornerRadius="8" Padding="14,20,14,26" Margin="0,0,0,10">
             <RichTextBox x:Name="Doc" IsReadOnly="True" IsDocumentEnabled="False"

@@ -132,22 +132,28 @@ def main() -> int:
                 shutil.rmtree(d, ignore_errors=True)
                 print(f"清理 {d.relative_to(ROOT)}")
 
-    print("=" * 64)
-    print("[1/3] 编译主程序")
+    print("=" * 64, flush=True)
+    print("[1/4] 源码扫黑（规范 §七 硬禁止：系统框 / 提示音 / 网页原生框）", flush=True)
+    rc = subprocess.run([sys.executable, str(HERE / "no_system_popup.py")])
+    if rc.returncode != 0:
+        print("× 扫黑未通过，编译中止（规则见 tools/no_system_popup.py）")
+        return 1
+
+    print("[2/4] 编译主程序")
     if not run(["dotnet", "build", "-c", "Release", "-v", "m"], APP_DIR):
         return 1
 
-    print("[2/3] 打包 payload.zip")
+    print("[3/4] 打包 payload.zip")
     n = make_payload()
     if n == 0:
         return 1
 
     if not args.no_installer:
-        print("[3/3] 编译安装器")
+        print("[4/4] 编译安装器")
         if not run(["dotnet", "build", "-c", "Release", "-v", "m"], SETUP_DIR):
             return 1
     else:
-        print("[3/3] 跳过安装器")
+        print("[4/4] 跳过安装器")
 
     pairs = artifact_list()
     print("-" * 64)

@@ -18,6 +18,11 @@
     <SolidColorBrush x:Key="HoverBrush"   Color="#F5F5F5"/>
     <SolidColorBrush x:Key="PressedBrush" Color="#EBEBEB"/>
     <SolidColorBrush x:Key="MenuBarHoverBrush" Color="#E8E8E8"/>
+    <!-- 状态栏专用两色（规范 §二：底 #F0F0F0、上边线 #E0E0E0）。
+         必须独立成键——状态栏底色比窗口底色沉一档，才会读成「一条仪表带」而不是页面的一部分；
+         而 BorderBrush 是全区共用的卡片边线，改它会连带动所有卡片与对话框。 -->
+    <SolidColorBrush x:Key="StatusBrush"       Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="StatusBorderBrush" Color="#E0E0E0"/>
     <!-- 兜底强调色：Accent.Init() 会用图标取出的主色覆盖它 -->
     <SolidColorBrush x:Key="AccentBrush"      Color="#0F6E56"/>
     <SolidColorBrush x:Key="AccentSoftBrush"  Color="#E6F2EE"/>
@@ -68,13 +73,6 @@
                 <Grid Grid.Column="0" VerticalAlignment="Center">
                     <ContentPresenter x:Name="Ico" ContentSource="Icon"
                                       Width="16" Height="16" VerticalAlignment="Center"/>
-                    <Viewbox x:Name="Chk" Width="14" Height="14" Visibility="Collapsed">
-                        <Canvas Width="24" Height="24">
-                            <Path Data="M4.5 12.5l5 5L19.5 7"
-                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="2.2"
-                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                        </Canvas>
-                    </Viewbox>
                 </Grid>
 
                 <ContentPresenter Grid.Column="1" ContentSource="Header" Margin="9,0,0,0"
@@ -91,10 +89,16 @@
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.45"/>
             </Trigger>
-            <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Chk" Property="Visibility" Value="Visible"/>
+            <!-- 勾选：不再在 XAML 里另画一个勾（图标规范 §七：勾选就用 check 键）。
+                 MenuBuilder 给可勾选项装的 Icon 就是 Icons.Check(强调色, 14)，
+                 所以这里只按勾选态决定图标显不显示 —— 未勾选的互斥项不该露出那个勾。 -->
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsCheckable" Value="True"/>
+                    <Condition Property="IsChecked" Value="False"/>
+                </MultiTrigger.Conditions>
                 <Setter TargetName="Ico" Property="Visibility" Value="Collapsed"/>
-            </Trigger>
+            </MultiTrigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 

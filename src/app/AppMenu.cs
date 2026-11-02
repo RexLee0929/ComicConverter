@@ -96,7 +96,7 @@ namespace ComicConverter
                 Of("打开程序目录(_P)", "open-appdir", "window"),
                 Of("打开配置目录(_C)", "open-config-dir", "settings"),
                 Sep(),
-                Of("打开阅读方向缓存(_K)", "open-cache", "db"),
+                Of("打开阅读方向缓存(_K)", "open-cache", "cache"),
                 Of("清除阅读方向缓存(_X)", "clear-cache", "trash"),
                 Sep(),
                 Of("查看错误日志(_L)", "open-log", "file"),
@@ -109,7 +109,7 @@ namespace ComicConverter
             // 使用说明不进菜单——文档归仓库，程序内不放。
             tree.Add(Pair("帮助(_H)", new List<Item>
             {
-                Of("关于 " + Brand.Name, "about", "info"),
+                Of("关于 " + Brand.Name, "about", "about"),
                 Of(Brand.Email, "copy-email", "mail")
             }));
 

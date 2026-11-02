@@ -18,6 +18,8 @@ python tools/build.py --apply    # 编译并把源码同步到发布区（不含
 python tools/build.py --clean    # 先清 bin/obj 再编译
 ```
 
+构建前会运行 `tools/no_system_popup.py`，扫描主程序和安装器源码中的系统消息框、提示音和网页原生弹窗等禁止项；有命中时停止编译。可单独运行 `python tools/no_system_popup.py`，或加 `--list` 查看规则。
+
 手工分步也可以，注意安装器依赖主程序产物打成的 `payload.zip`：
 
 ```bash
@@ -77,6 +79,7 @@ src/installer/     安装 / 卸载向导（WinForms）
 src/version.props  版本与作者信息
 tools/
   build.py         构建入口
+  no_system_popup.py  构建前检查系统弹框、提示音和网页原生弹窗
   sync_to_code.py  把当前目录同步到另一个发布目录（按哈希比较，目标被外部改过就跳过）
   ui_render/       界面离屏渲染器（含菜单结构自检）
   _shot_page.py    用无头 Chrome 渲染 Web/index.html（确认条 / 提示条）；下划线开头，只在本机用
@@ -95,12 +98,14 @@ tools/
 dotnet run -c Release --project tools/ui_render -- tools/_shots/ui
 ```
 
-会输出 `menu-bar.png`、`menu-convert.png`、`menu-output.png`、`menu-tools.png`、`menu-help.png`、`about.png`、`about-copied.png`、`dlg-error.png`、`splash-icon.png`，同时自检：
+会输出 `menu-bar.png`、`menu-convert.png`、`menu-output.png`、`menu-tools.png`、`menu-help.png`、`about.png`、`about-copied.png`、`dlg-error.png`、`dlg-error-brief.png`、`splash-icon.png`，同时自检：
 
+- 程序图标表中每个键都经 `Icons.Get` + `RenderTargetBitmap` 逐个离屏渲染，断言存在非透明墨迹；未知键在该自检中强制失败，不会静默返回空；这条测试捕获 WPF 路径解析成功但最终没有像素的静默消失；
 - 菜单结构（一级 ≥ 2 栏、每栏至少一项可用、有「帮助」、其下有 `about` 命令）—— 任一条不满足会打印 `!` 并以退出码 1 结束；
 - 每个弹层真的打开了（`popup.IsOpen`），按标题找一级菜单，不用 `Items[n]` 索引（加一栏就错位）；宿主忙时弹层偶尔没展开，会收起重开一次再判失败；
 - 启动画面图标取的是 `BrandIcon` 挑出的最大帧（宽 ≥ 256 才算过，取不到直接报失败）；
-- 关于窗的富文本没有溢出（`ExtentHeight` 与 `ViewportHeight` 对比）、`PagePadding` 仍是 `0,0,0,0`。
+- 关于窗的富文本没有溢出（`ExtentHeight` 与 `ViewportHeight` 对比）、`PagePadding` 仍是 `0,0,0,0`；
+- 关于窗与错误框宽度在 320–640 DIP 之间，不同内容的错误框宽度不同，改宽后仍水平居中。
 
 页面（Web/index.html）用无头 Chrome 看：`python tools/_shot_page.py confirm` 会打桩 `fetch`、调起内联确认条再截图，`toast` 同理。
 

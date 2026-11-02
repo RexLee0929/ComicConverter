@@ -4,6 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.7] - 2026-11-02
+
+### 变更
+
+- 关于窗口和错误框按内容测量宽度，正文较长时换行，不再使用固定宽度
+- 转换与格式互转日志用「成功」「失败」标明结果，替代原先的符号
+- 菜单图标、选中标记和状态栏配色调整
+
+### 修复
+
+- 页面意外发出原生确认框或输入框时，默认取消操作并提示，不再自动确认；离开页面的提示仍放行
+
 ## [1.0.6] - 2026-11-01
 
 ### 变更
@@ -115,6 +127,7 @@
 - **断点续跑**：目标已存在记「跳过」，默认 6 并发（可 1–32）
 - **安装 / 卸载向导**：可选「仅为我安装」（无需管理员）或「为所有用户安装」（请求一次 UAC）
 
+[1.0.7]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/RexLee0929/ComicConverter/compare/v1.0.3...v1.0.4

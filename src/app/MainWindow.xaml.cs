@@ -354,14 +354,39 @@ namespace ComicConverter
             }
         }
 
-        /// <summary>页面里遗留的 alert / confirm：取消原生框，改走宿主的错误框或状态栏。</summary>
+        /// <summary>
+        /// 页面里遗留的 alert / confirm / prompt：取消原生框，改走宿主自己的提示层（规范 §七.4）。
+        /// 取消的方式是**不调 Accept()**——WebView2 文档原话是「Not run this method to indicate cancel」：
+        /// confirm 返回 false、prompt 返回空串。这条兜底路径的方向必须是「拒绝」，
+        /// 宁可让那个动作不执行，也不能替用户点掉一个本该被拦下的确认框。
+        /// </summary>
         void OnScriptDialog(object sender, CoreWebView2ScriptDialogOpeningEventArgs e)
         {
             try
             {
-                e.Accept();          // confirm 一律当「确认」（页面已改用内联确认条，这里只是兜底）
-                if (e.Kind == CoreWebView2ScriptDialogKind.Alert)
-                    Toast(e.Message);
+                switch (e.Kind)
+                {
+                    case CoreWebView2ScriptDialogKind.Alert:
+                        // alert 没有返回值，接受即关闭；正文转成状态栏瞬时提示。
+                        e.Accept();
+                        Toast(e.Message);
+                        break;
+
+                    case CoreWebView2ScriptDialogKind.Beforeunload:
+                        // 这里不接受就等于否掉卸载/跳转，会让关窗和导航卡住；放行。
+                        e.Accept();
+                        break;
+
+                    case CoreWebView2ScriptDialogKind.Prompt:
+                        // 不调 Accept = 取消，prompt 返回 false/空值。
+                        Toast("已拦截页面弹出的输入框，操作未执行");
+                        break;
+
+                    default:
+                        // Confirm：不调 Accept = 取消，confirm 返回 false，那个动作不执行。
+                        Toast("已拦截页面弹出的确认框，操作未执行");
+                        break;
+                }
             }
             catch { }
         }

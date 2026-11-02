@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -163,18 +163,18 @@ namespace ComicConverter
                             {
                                 var r = Core.ConvertOne(it, cfg, null);
                                 if (r.Skip) Bump("skip");
-                                else if (r.Err != null) { Bump("err"); Log("✗ " + Path.GetFileName(it.Src) + "：" + r.Err, "e"); }
+                                else if (r.Err != null) { Bump("err"); Log("失败 " + Path.GetFileName(it.Src) + "：" + r.Err, "e"); }
                                 else
                                 {
                                     Bump("ok");
                                     lock (Sync) { _current = r.Series + " v" + r.Vol; }
-                                    Log("✓ " + Path.GetFileName(r.Dst) + "  " + r.Mb + " MB", "i");
+                                    Log("成功 " + Path.GetFileName(r.Dst) + "  " + r.Mb + " MB", "i");
                                 }
                             }
                             catch (Exception ex)
                             {
                                 Bump("err");
-                                Log("✗ " + Path.GetFileName(it.Src) + "：" + ex.Message, "e");
+                                Log("失败 " + Path.GetFileName(it.Src) + "：" + ex.Message, "e");
                             }
                         }
                     });
@@ -217,14 +217,14 @@ namespace ComicConverter
                     {
                         var r = Repack.RepackOne(f, cfg);
                         if (r == "skip" || r == "same") { Bump("skip"); continue; }
-                        if (r != null) { Bump("err"); Log("✗ " + Path.GetFileName(f) + "：" + r, "e"); continue; }
+                        if (r != null) { Bump("err"); Log("失败 " + Path.GetFileName(f) + "：" + r, "e"); continue; }
                         Bump("ok");
-                        Log("✓ " + Path.GetFileName(f), "i");
+                        Log("成功 " + Path.GetFileName(f), "i");
                     }
                     catch (Exception ex)
                     {
                         Bump("err");
-                        Log("✗ " + Path.GetFileName(f) + "：" + ex.Message, "e");
+                        Log("失败 " + Path.GetFileName(f) + "：" + ex.Message, "e");
                     }
                 }
                 int ok, er, sk;

@@ -19,6 +19,13 @@ namespace ComicConverter
     {
         readonly DispatcherTimer _reset;
 
+        /// <summary>
+        /// 宽度区间（规范 §七.2）：下限 320 免得短内容挤成一条缝，上限 640 是正文阅读行宽
+        /// —— 超过就换行，不把窗口撑宽。区间内的落点由 MeasureWidth() 按内容算出来。
+        /// </summary>
+        const double MinContentWidth = 320;
+        const double MaxContentWidth = 640;
+
         public string Author { get { return Brand.Author; } }
         public string Email { get { return Brand.Email; } }
 
@@ -144,10 +151,67 @@ namespace ComicConverter
                 Dispatcher.BeginInvoke(new Action(FitToContent), DispatcherPriority.Background);
         }
 
+        /// <summary>
+        /// 按内容量出窗口宽（规范 §10.4：宽度必须运行时量，不许写死常量）。
+        /// 三步：① 逐行量富文本里最长那一行的自然宽；② 加上卡片外边距/边距与窗口边框
+        /// （这些数从控件自身属性读，C# 里不抄任何尺寸）；③ 夹到 320~640 —— 640 是阅读行宽
+        /// 上限，正文超了就换行，不把窗口撑宽（§七.2）。改 ABOUT.md 的文案，宽度自动跟着变。
+        /// 调用时机必须是 OnSourceInitialized：那时已有 HWND 能量出边框，又还没绘制，不会看到跳变。
+        /// </summary>
+        void MeasureWidth()
+        {
+            double natural = NaturalWidthOfDocument();
+            if (natural <= 0) return;              // 量不出来就保持初始宽，不要缩成一条缝
+
+            double chrome = DocCard.Margin.Left + DocCard.Margin.Right
+                          + DocCard.BorderThickness.Left + DocCard.BorderThickness.Right
+                          + DocCard.Padding.Left + DocCard.Padding.Right
+                          + WindowChrome.HorizontalInset(this);
+
+            Width = Math.Min(MaxContentWidth, Math.Max(MinContentWidth, Math.Ceiling(natural + chrome)));
+
+            // 宽度是刚刚才定下来的，WPF 自己那次居中用的是改宽之前的尺寸 —— 自己重摆一次水平位置，
+            // 否则框会偏在一边（竖直方向由启动位置决定，高度稍后由 FitToContent 定）。
+            if (WindowStartupLocation == WindowStartupLocation.CenterOwner && Owner != null && Owner.IsVisible)
+                Left = Owner.Left + (Owner.ActualWidth - Width) / 2;
+            else
+            {
+                var wa = SystemParameters.WorkArea;
+                Left = wa.Left + (wa.Width - Width) / 2;
+            }
+        }
+
+        /// <summary>富文本里最长的一行（按段取，段内再按硬换行拆行——整段拼起来量会偏大）。</summary>
+        double NaturalWidthOfDocument()
+        {
+            if (Doc == null || Doc.Document == null) return 0;
+
+            var flow = Doc.Document;
+            var family = Doc.FontFamily ?? new FontFamily("Microsoft YaHei UI");
+            double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            double max = 0;
+
+            foreach (var blk in flow.Blocks)
+            {
+                var p = blk as Paragraph;
+                if (p == null) continue;
+
+                double size = p.FontSize;
+                if (double.IsNaN(size) || size <= 0) size = flow.FontSize;
+                var face = new Typeface(family, FontStyles.Normal, p.FontWeight, FontStretches.Normal);
+
+                string text = new TextRange(p.ContentStart, p.ContentEnd).Text;
+                double w = WindowChrome.NaturalWidthLines(text, face, size, dpi);
+                if (w > max) max = w;
+            }
+            return max;
+        }
+
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
             WindowChrome.Apply(this);   // 关于框也是主窗口的一层，标题栏必须同色（§七.2）
+            MeasureWidth();             // 先量宽再上屏：宽度由内容决定，不是从 XAML 里读的
         }
 
         protected override void OnContentRendered(EventArgs e)

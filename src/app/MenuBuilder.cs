@@ -21,6 +21,7 @@ namespace ComicConverter
         {
             var built = new Built();
             Brush iconBrush = Application_Resource("InkBrush");
+            Brush accentBrush = Application_Resource("AccentBrush");
 
             foreach (var group in AppMenu.Build())
             {
@@ -43,6 +44,10 @@ namespace ComicConverter
                     };
                     if (it.Group == null && it.Icon != null)
                         mi.Icon = Icons.Get(it.Icon, iconBrush);
+                    else if (it.Group != null)
+                        // 同组互斥项：图标位装的就是「勾」本身（图标规范 §七），
+                        // 显示与否由模板按 IsChecked 决定，不再另画一个勾。
+                        mi.Icon = Icons.Check(accentBrush);
 
                     var captured = it;
                     mi.Click += delegate { onItem(captured); };
